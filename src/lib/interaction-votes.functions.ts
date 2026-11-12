@@ -10,12 +10,7 @@ export const getPollResults = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ pollKey: z.string().min(1).max(200) }).parse(data))
   .handler(async ({ data }): Promise<{ counts: number[] }> => {
     const { sql } = await import("@/lib/neon");
-    const rows = await sql.query(
-      `select option_index, count(*)::int as n
-       from public.poll_votes where poll_key = $1
-       group by option_index order by option_index`,
-      [data.pollKey],
-    );
+    const rows = await sql.query(`select option_index, n from public.rout_poll_tally($1)`, [data.pollKey]);
     const counts = new Array<number>(6).fill(0);
     for (const r of rows as { option_index: number; n: number }[]) {
       if (r.option_index >= 0 && r.option_index < 6) counts[r.option_index] = r.n;
@@ -51,16 +46,10 @@ export const votePoll = createServerFn({ method: "POST" })
     const pepper = process.env.BETTER_AUTH_SECRET ?? "";
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`poll:${pepper}:${data.pollKey}:${ip}`));
     const serverVoterKey = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 64);
-    await sql.query(
-      `insert into public.poll_votes (poll_key, option_index, voter_key)
-       values ($1, $2, $3) on conflict (poll_key, voter_key) do nothing`,
-      [data.pollKey, data.optionIndex, serverVoterKey],
-    );
+    // One atomic vote + tally; a repeat vote by the same voter is ignored (db/0238).
     const rows = await sql.query(
-      `select option_index, count(*)::int as n
-       from public.poll_votes where poll_key = $1
-       group by option_index order by option_index`,
-      [data.pollKey],
+      `select option_index, n from public.rout_poll_vote($1, $2, $3)`,
+      [data.pollKey, data.optionIndex, serverVoterKey],
     );
     const counts = new Array<number>(6).fill(0);
     for (const r of rows as { option_index: number; n: number }[]) {
