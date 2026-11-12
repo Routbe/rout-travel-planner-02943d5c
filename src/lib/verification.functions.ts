@@ -37,7 +37,6 @@ export const startVerification = createServerFn({ method: "POST" })
     const { stripeKey, createCheckoutSession, normalizeDonationPlan, trustedCheckoutOrigin } =
       await import("./verification.server");
     const { clampContribution } = await import("./contributions");
-    const { dbAdmin } = await import("@/lib/db/admin.server");
 
     // Check the provider BEFORE writing a payment row: an unconfigured Stripe
     // would otherwise leave an orphan pending payment behind on every click.
@@ -58,21 +57,18 @@ export const startVerification = createServerFn({ method: "POST" })
     const { getRequest } = await import("@tanstack/react-start/server");
     const origin = trustedCheckoutOrigin(getRequest(), data.origin);
 
-    const { data: payment, error } = await dbAdmin
-      .from("verification_payments")
-      .insert({
-        user_id: context.userId,
-        tier: "early_believer",
-        amount_cents: baseCents,
-        donation_cents: donationCents,
-        donation_plan: donationPlan,
-        provider: "stripe",
-        reference_code: `ROUT-${Math.floor(1000 + Math.random() * 9000)}`,
-      })
-      .select("id")
-      .single();
-    if (error || !payment) {
+    const { openPayment } = await import("./payments/verification-payment-store.server");
+    const payment = await openPayment({
+      provider: "stripe",
+      amountCents: baseCents,
+      donationCents,
+      donationPlan,
+      reference: `ROUT-${Math.floor(1000 + Math.random() * 9000)}`,
+    }).catch((error: unknown) => {
       console.error("[verification] payment insert failed", error);
+      return null;
+    });
+    if (!payment) {
       return { ok: false as const, reason: "payment_record_failed" as const };
     }
 
@@ -105,7 +101,8 @@ export const startVerification = createServerFn({ method: "POST" })
       console.error("[verification] stripe checkout failed", {
         message: err instanceof Error ? err.message.slice(0, 300) : "checkout_failed",
       });
-      await dbAdmin.from("verification_payments").update({ status: "failed" }).eq("id", payment.id);
+      const { failOwnPayment } = await import("./payments/verification-payment-store.server");
+      await failOwnPayment(payment.id);
       return { ok: false as const, reason: "checkout_failed" as const };
     }
   });
@@ -156,7 +153,6 @@ export const startCardPaymentIntent = createServerFn({ method: "POST" })
     const baseCents = await bestPriceCents("card", promo, context.userId);
     const totalCents = baseCents + donationCents;
 
-    const { dbAdmin } = await import("@/lib/db/admin.server");
     const { sql } = await import("@/lib/neon");
     const email = (context.claims as { email?: string } | null)?.email ?? null;
 
@@ -201,14 +197,8 @@ export const startCardPaymentIntent = createServerFn({ method: "POST" })
             donationCents,
           });
           if (reused) {
-            await dbAdmin
-              .from("verification_payments")
-              .update({
-                amount_cents: baseCents,
-                donation_cents: donationCents,
-                donation_plan: donationPlan,
-              })
-              .eq("id", open.id);
+            const { repricePayment } = await import("./payments/verification-payment-store.server");
+            await repricePayment(open.id, baseCents, donationCents, donationPlan);
             return {
               ok: true as const,
               free: false as const,
@@ -229,32 +219,24 @@ export const startCardPaymentIntent = createServerFn({ method: "POST" })
     // geen entitlement) zodat een latere webhook ze nooit activeert. Rijen met
     // status "processing" en "paid" blijven onaangeroerd.
     try {
-      await sql`
-        update public.verification_payments
-           set status = 'expired', updated_at = now()
-         where user_id = ${context.userId}
-           and provider = 'stripe'
-           and status in ('pending', 'incomplete')
-      `;
+      const { expireOwnOpenStripePayments } = await import("./payments/verification-payment-store.server");
+      await expireOwnOpenStripePayments();
     } catch (err) {
       console.error("[verification] opruimen verlaten pogingen mislukt", err);
     }
 
-    const { data: payment, error } = await dbAdmin
-      .from("verification_payments")
-      .insert({
-        user_id: context.userId,
-        tier: "early_believer",
-        amount_cents: baseCents,
-        donation_cents: donationCents,
-        donation_plan: donationPlan,
-        provider: "stripe",
-        reference_code: `ROUT-${Math.floor(1000 + Math.random() * 9000)}`,
-      })
-      .select("id")
-      .single();
-    if (error || !payment) {
+    const { openPayment } = await import("./payments/verification-payment-store.server");
+    const payment = await openPayment({
+      provider: "stripe",
+      amountCents: baseCents,
+      donationCents,
+      donationPlan,
+      reference: `ROUT-${Math.floor(1000 + Math.random() * 9000)}`,
+    }).catch((error: unknown) => {
       console.error("[verification] payment insert failed", error);
+      return null;
+    });
+    if (!payment) {
       return { ok: false as const, reason: "payment_record_failed" as const };
     }
 
@@ -281,10 +263,8 @@ export const startCardPaymentIntent = createServerFn({ method: "POST" })
 
       // Bewaar de intent-id meteen: zonder deze verwijzing kan de polling een
       // asynchrone betaling (Bancontact, iDEAL, QR) later niet verzoenen.
-      await dbAdmin
-        .from("verification_payments")
-        .update({ provider_ref: intent.intentId })
-        .eq("id", payment.id);
+      const { attachProviderRef } = await import("./payments/verification-payment-store.server");
+      await attachProviderRef(payment.id, intent.intentId);
       return {
         ok: true as const,
         free: false as const,
@@ -298,7 +278,8 @@ export const startCardPaymentIntent = createServerFn({ method: "POST" })
       console.error("[verification] stripe intent failed", {
         message: err instanceof Error ? err.message.slice(0, 300) : "intent_failed",
       });
-      await dbAdmin.from("verification_payments").update({ status: "failed" }).eq("id", payment.id);
+      const { failOwnPayment } = await import("./payments/verification-payment-store.server");
+      await failOwnPayment(payment.id);
       return { ok: false as const, reason: "checkout_failed" as const };
     }
   });
@@ -370,7 +351,6 @@ export const startSepaVerification = createServerFn({ method: "POST" })
     if (!legal.ok) return { ok: false as const, reason: legal.reason };
 
     const { clampContribution } = await import("./contributions");
-    const { dbAdmin } = await import("@/lib/db/admin.server");
 
     const reference = `ROUT-${Math.floor(1000 + Math.random() * 9000)}`;
     const donationPlan = normalizeDonationPlan(data.donationPlan ?? "none");
@@ -385,22 +365,14 @@ export const startSepaVerification = createServerFn({ method: "POST" })
     const baseCents = await bestPriceCents("sepa", promo, context.userId);
     const totalCents = baseCents + donationCents;
 
-    const { data: payment, error } = await dbAdmin
-      .from("verification_payments")
-      .insert({
-        user_id: context.userId,
-        tier: "early_believer",
-        amount_cents: baseCents,
-        donation_cents: donationCents,
-        donation_plan: donationPlan,
+    const { openPayment } = await import("./payments/verification-payment-store.server");
+    const payment = await openPayment({ provider: "sepa", amountCents: baseCents, donationCents, donationPlan, reference })
+      .catch((error: unknown) => {
+        console.error("[verification] sepa payment insert failed", error);
+        return null;
+      });
 
-        provider: "sepa",
-        reference_code: reference,
-      })
-      .select("id, amount_cents, reference_code")
-      .single();
-
-    if (error || !payment) return { ok: false as const };
+    if (!payment) return { ok: false as const };
     return {
       ok: true as const,
       reference: payment.reference_code ?? reference,

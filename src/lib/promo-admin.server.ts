@@ -184,22 +184,10 @@ export async function createPromoAndInvite(input: CreatePromoInput): Promise<Cre
       ? `${percentOff}% korting${maxDiscountCents ? ` (max €${(maxDiscountCents / 100).toFixed(2)})` : ""}`
       : `€${(amountOffCents / 100).toFixed(2)} korting`);
 
+  // 0229: admin-only database function (checks the caller's admin role itself).
   await sql`
-    insert into public.promo_codes
-      (code, label, percent_off, amount_off_cents, max_discount_cents,
-       max_redemptions, expires_at, active)
-    values
-      (${code}, ${label}, ${percentOff}, ${amountOffCents}, ${maxDiscountCents},
-       ${maxRedemptions}, ${expiresAt}, true)
-    on conflict (code) do update set
-      label = excluded.label,
-      percent_off = excluded.percent_off,
-      amount_off_cents = excluded.amount_off_cents,
-      max_discount_cents = excluded.max_discount_cents,
-      max_redemptions = excluded.max_redemptions,
-      expires_at = excluded.expires_at,
-      active = true,
-      updated_at = now()
+    select public.rout_promo_admin_save(${code}, ${label}, ${percentOff}, ${amountOffCents}, ${maxDiscountCents},
+                                        ${maxRedemptions}, ${expiresAt}::timestamptz, true)
   `;
 
   await logPromoEvent(code, "created", label);
@@ -285,13 +273,7 @@ export async function listPromoCodes(limit = 25) {
     expires_at: string | null;
     created_at: string;
   };
-  const rows = (await sql`
-    select code, label, percent_off, amount_off_cents, max_redemptions,
-           redeemed_count, active, expires_at, created_at
-      from public.promo_codes
-     order by created_at desc
-     limit ${limit}
-  `) as Row[];
+  const rows = ((await sql`select public.rout_promo_admin_list(${limit}) as p`) as { p: Row }[]).map((r) => r.p);
   return rows.map((row) => ({
     code: row.code,
     label: row.label,

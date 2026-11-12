@@ -24,11 +24,8 @@ export interface InvoiceSummary {
 async function invoiceNumberFor(createdAt: string): Promise<string> {
   let sequence = 1;
   try {
-    const rows = (await sql`
-      select count(*)::int as n from public.verification_payments
-       where status = 'paid' and created_at <= ${createdAt}
-    `) as Row[];
-    sequence = Math.max(1, Number(rows[0]?.["n"] ?? 1));
+    const { paidSequence } = await import("./payments/verification-payment-store.server");
+    sequence = Math.max(1, await paidSequence(createdAt));
   } catch {
     /* nummering valt terug op 1 */
   }

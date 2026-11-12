@@ -71,15 +71,8 @@ async function resolveFromDb(normalized: string): Promise<PromoDiscount | null> 
     label: string | null;
     max_discount_cents: number | null;
   };
-  const rows = (await sql`
-    select percent_off, amount_off_cents, label, max_discount_cents
-      from public.promo_codes
-     where code = ${normalized}
-       and active = true
-       and (expires_at is null or expires_at > now())
-       and (max_redemptions is null or redeemed_count < max_redemptions)
-     limit 1
-  `) as Row[];
+  // 0229: one exact, still redeemable code — the table itself is closed to the app.
+  const rows = (await sql`select * from public.rout_promo_lookup(${normalized})`) as Row[];
   const row = rows[0];
   if (!row) return null;
   return toDiscount(
@@ -109,17 +102,17 @@ export async function resolvePromo(code: string | null | undefined): Promise<Pro
   return toDiscount(normalized, found.percentOff, found.amountOffCents, found.label ?? null);
 }
 
-/** Schrijft één regel in het promo-auditspoor. Faalt nooit de flow. */
+/**
+ * Schrijft één admin-regel in het promo-auditspoor (aangemaakt / verstuurd).
+ * Inwisselingen schrijft `rout_promo_redeem` zelf weg. Faalt nooit de flow.
+ */
 export async function logPromoEvent(
   code: string,
-  event: "created" | "sent_email" | "sent_sms" | "redeemed" | "exhausted",
+  event: "created" | "sent_email" | "sent_sms",
   detail?: string | null,
 ): Promise<void> {
   try {
-    await sql`
-      insert into public.promo_code_events (code, event, detail)
-      values (${normalizePromoCode(code)}, ${event}, ${detail ?? null})
-    `;
+    await sql`select public.rout_promo_event(${normalizePromoCode(code)}, ${event}, ${detail ?? null})`;
   } catch (error) {
     console.error("[promo] audit log failed", error);
   }
@@ -131,39 +124,20 @@ export async function isPromoAvailable(code: string): Promise<boolean> {
 }
 
 /**
- * Verhoogt de teller bij een geslaagde claim. De update is atomair: de
- * `max_redemptions`-guard zit in de WHERE, zodat twee gelijktijdige claims nooit
- * samen over het maximum gaan. Geeft `false` als de code al op was.
+ * Verhoogt de teller bij een geslaagde claim via `rout_promo_redeem` (0229).
+ * Eén UPDATE met de `max_redemptions`-guard in de WHERE, onder rijvergrendeling:
+ * twee gelijktijdige claims gaan nooit samen over het maximum. De functie
+ * schrijft ook het auditspoor. Geeft `false` als de code al op was.
  */
 export async function recordPromoRedemption(code: string | null | undefined): Promise<boolean> {
   if (!code) return false;
   const normalized = normalizePromoCode(code);
   try {
-    const rows = (await sql`
-      update public.promo_codes
-         set redeemed_count = redeemed_count + 1,
-             last_redeemed_at = now(),
-             active = case
-               when max_redemptions is not null and redeemed_count + 1 >= max_redemptions
-                 then false else active end,
-             updated_at = now()
-       where code = ${normalized}
-         and active = true
-         and (expires_at is null or expires_at > now())
-         and (max_redemptions is null or redeemed_count < max_redemptions)
-      returning redeemed_count, max_redemptions
-    `) as { redeemed_count: number; max_redemptions: number | null }[];
-
-    const row = rows[0];
-    if (!row) {
-      await logPromoEvent(normalized, "exhausted", "claim geweigerd: niet meer geldig");
-      return false;
-    }
-    await logPromoEvent(normalized, "redeemed", `gebruik #${row.redeemed_count}`);
-    if (row.max_redemptions !== null && row.redeemed_count >= row.max_redemptions) {
-      await logPromoEvent(normalized, "exhausted", "maximum bereikt");
-    }
-    return true;
+    const rows = (await sql`select * from public.rout_promo_redeem(${normalized})`) as {
+      redeemed_count: number;
+      max_redemptions: number | null;
+    }[];
+    return rows.length > 0;
   } catch (error) {
     console.error("[promo] redemption counter update failed", error);
     return false;

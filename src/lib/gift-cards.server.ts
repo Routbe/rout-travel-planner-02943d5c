@@ -40,16 +40,6 @@ export interface GiftOrderInput {
   } | null;
 }
 
-/** Unieke code, met een paar herkansingen bij een (zeldzame) botsing. */
-async function uniqueGiftCode(): Promise<string> {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const code = generateGiftCode();
-    const rows = (await sql`select 1 from public.gift_cards where code = ${code}`) as Row[];
-    if (rows.length === 0) return code;
-  }
-  throw new Error("gift_code_generation_failed");
-}
-
 export async function createGiftOrder(
   input: GiftOrderInput,
 ): Promise<{ id: string; code: string }> {
@@ -60,26 +50,24 @@ export async function createGiftOrder(
   if (physical && (!input.ship?.line1 || !input.ship?.postalCode || !input.ship?.city)) {
     throw new Error("shipping_address_incomplete");
   }
-  const code = await uniqueGiftCode();
   const design = giftDesign(input.design).id;
 
-  const rows = (await sql`
-    insert into public.gift_cards (
-      code, amount_cents, purchaser_user_id, purchaser_email, purchaser_name,
-      recipient_email, recipient_name, message, design,
-      physical_delivery, ship_name, ship_line1, ship_postal_code, ship_city, ship_country
-    ) values (
-      ${code}, ${amount}, ${input.purchaserUserId ?? null}, ${input.purchaserEmail},
-      ${input.purchaserName ?? null}, ${input.recipientEmail ?? null}, ${input.recipientName ?? null},
-      ${input.message ?? null}, ${design},
-      ${physical}, ${input.ship?.name ?? null}, ${input.ship?.line1 ?? null},
-      ${input.ship?.postalCode ?? null}, ${input.ship?.city ?? null}, ${physical ? country : null}
-    )
-    returning id, code
-  `) as Row[];
-  const row = rows[0];
-  if (!row) throw new Error("gift_order_failed");
-  return { id: String(row["id"]), code: String(row["code"]) };
+  // 0229: rout_gift_card_create checks the purchaser is the caller and returns
+  // null when the random code is already taken — then we draw a new one.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = generateGiftCode();
+    const rows = (await sql`
+      select public.rout_gift_card_create(
+        ${code}, ${amount}, ${input.purchaserUserId ?? null}, ${input.purchaserEmail},
+        ${input.purchaserName ?? null}, ${input.recipientEmail ?? null}, ${input.recipientName ?? null},
+        ${input.message ?? null}, ${design}, ${physical},
+        ${input.ship?.name ?? null}, ${input.ship?.line1 ?? null}, ${input.ship?.postalCode ?? null},
+        ${input.ship?.city ?? null}, ${physical ? country : null}) as id
+    `) as Row[];
+    const id = rows[0]?.["id"];
+    if (typeof id === "string") return { id, code };
+  }
+  throw new Error("gift_code_generation_failed");
 }
 
 /** Stripe Checkout voor één cadeaubon. Metadata koppelt de webhook terug. */
@@ -123,7 +111,10 @@ export async function startGiftCheckout(opts: {
 
 /**
  * Activeert een betaalde bon: idempotent (een tweede webhook doet niets meer),
- * zet de code klaar als eenmalige promocode, en levert factuur + bon af.
+ * zet de code klaar als promocode, en levert factuur + bon af. Alles gebeurt in
+ * één databasefunctie (0229) die de bon vergrendelt (FOR UPDATE), zodat twee
+ * gelijktijdige webhooks nooit allebei activeren. `paidCents` (wat de betaler
+ * werkelijk betaalde) moet, wanneer meegegeven, exact de waarde van de bon zijn.
  */
 export async function markGiftCardPaid(opts: {
   giftId: string;
@@ -131,37 +122,21 @@ export async function markGiftCardPaid(opts: {
   deliver?: boolean;
   maxRedemptions?: number;
   expiresAt?: string | null;
-}): Promise<"activated" | "duplicate" | "not_found"> {
-  const results = await sql.transaction([
-    sql`select id from public.gift_cards where id = ${opts.giftId} for update`,
-    sql`with activated as (
-    update public.gift_cards
-       set status = 'paid',
-           paid_at = now(),
-           fulfilment_status = case
-             when physical_delivery then 'pending_print'
-             else fulfilment_status
-           end,
-           stripe_reference = coalesce(${opts.reference ?? null}, stripe_reference),
-           updated_at = now()
-     where id = ${opts.giftId}
-       and (status = 'pending' or (status = 'paid' and not exists (
-         select 1 from public.promo_codes where code = public.gift_cards.code
-       )))
-    returning *
-    ), promo as (
-      insert into public.promo_codes (code, label, percent_off, amount_off_cents, max_redemptions, expires_at, active)
-      select code, 'Cadeaubon', 0, amount_cents, ${opts.maxRedemptions ?? 1}, ${opts.expiresAt ?? null}::timestamptz, true from activated
-      on conflict (code) do nothing
-      returning code
-    ) select activated.* from activated
-  `]);
-  const row = results[1]?.[0];
-  if (!row) {
-    const exists =
-      (await sql`select status from public.gift_cards where id = ${opts.giftId}`) as Row[];
-    return exists.length > 0 ? "duplicate" : "not_found";
+  paidCents?: number | null;
+}): Promise<"activated" | "duplicate" | "not_found" | "amount_mismatch"> {
+  const results = (await sql`
+    select public.rout_gift_card_activate(${opts.giftId}, ${opts.reference ?? null}, ${opts.maxRedemptions ?? 1},
+                                          ${opts.expiresAt ?? null}::timestamptz, ${opts.paidCents ?? null}) as r
+  `) as Row[];
+  const result = (results[0]?.["r"] ?? {}) as { outcome?: string; card?: Row };
+  if (result.outcome !== "activated" || !result.card) {
+    if (result.outcome === "amount_mismatch") {
+      console.error("[gift] betaald bedrag wijkt af van de bon; niet geactiveerd", { giftId: opts.giftId });
+      return "amount_mismatch";
+    }
+    return result.outcome === "duplicate" ? "duplicate" : "not_found";
   }
+  const row = result.card;
 
   if (opts.deliver !== false) await deliverGiftCard(row).catch((error) => {
     console.error("[gift] bezorging mislukt", { giftId: opts.giftId, error });
@@ -240,14 +215,11 @@ export async function deliverGiftCard(row: Row): Promise<void> {
 
   if (!recipientSent || !purchaserSent) return;
 
-  await sql`
-    update public.gift_cards
-       set status = 'delivered', delivered_at = now(), invoice_number = ${invoiceNumber}, updated_at = now()
-     where id = ${String(row["id"])}
-  `;
+  await sql`select public.rout_gift_card_mark_delivered(${String(row["id"])}, ${invoiceNumber})`;
 }
 
-function toPublic(row: Row, redeemed: boolean): PublicGiftCard {
+function toPublic(row: Row): PublicGiftCard {
+  const redeemed = row["redeemed"] === true;
   return {
     code: String(row["code"]),
     amountCents: Number(row["amount_cents"] ?? 0),
@@ -268,29 +240,19 @@ function toPublic(row: Row, redeemed: boolean): PublicGiftCard {
 /** Publieke weergave: alleen betaalde/afgeleverde bonnen, nooit koperse-mail. */
 export async function fetchPublicGiftCard(codeInput: string): Promise<PublicGiftCard | null> {
   const code = normalizeGiftCode(codeInput);
-  const rows = (await sql`
-    select * from public.gift_cards where code = ${code} and status in ('paid', 'delivered')
-  `) as Row[];
-  const row = rows[0];
-  if (!row) return null;
-  const promo = (await sql`
-    select redeemed_count from public.promo_codes where code = ${code}
-  `) as Row[];
-  const redeemed = Number(promo[0]?.["redeemed_count"] ?? 0) > 0;
-  return toPublic(row, redeemed);
+  // 0229: safe fields only (never e-mail or address), paid/delivered cards only.
+  const rows = (await sql`select public.rout_gift_card_public(${code}) as c`) as Row[];
+  const row = (rows[0]?.["c"] ?? null) as Row | null;
+  return row ? toPublic(row) : null;
 }
 
-/** Bonnen die dit lid zelf kocht. */
-export async function fetchMyGiftCards(userId: string): Promise<PublicGiftCard[]> {
-  const rows = (await sql`
-    select g.*, coalesce(p.redeemed_count, 0) as redeemed_count
-      from public.gift_cards g
-      left join public.promo_codes p on p.code = g.code
-     where g.purchaser_user_id = ${userId}
-     order by g.created_at desc
-     limit 50
-  `) as Row[];
-  return rows.map((row) => toPublic(row, Number(row["redeemed_count"] ?? 0) > 0));
+/**
+ * Bonnen die dit lid zelf kocht. De database neemt het lid uit de
+ * aanvraagcontext (0229); `_userId` blijft voor de bestaande aanroeper.
+ */
+export async function fetchMyGiftCards(_userId: string): Promise<PublicGiftCard[]> {
+  const rows = (await sql`select public.rout_gift_card_mine() as c`) as Row[];
+  return rows.map((r) => toPublic(r["c"] as Row));
 }
 
 

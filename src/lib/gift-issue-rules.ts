@@ -52,6 +52,6 @@ export function resendTarget(stored: StoredGiftRecipient | null, input: GiftIssu
   };
 }
 
-export function requireGiftActivation(result: "activated" | "duplicate" | "not_found") {
-  if (result === "not_found") throw new Error("gift_activation_failed");
+export function requireGiftActivation(result: "activated" | "duplicate" | "not_found" | "amount_mismatch") {
+  if (result === "not_found" || result === "amount_mismatch") throw new Error("gift_activation_failed");
 }

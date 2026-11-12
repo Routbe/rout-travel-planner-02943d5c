@@ -74,7 +74,7 @@ export const adminResendGift = createServerFn({ method: "POST" })
     const promo = await resolvePromo(data.code);
     if (!promo) throw new Error("gift_not_available");
     const { sql } = await import("./neon");
-    const rows = await sql`select max_redemptions, to_json(expires_at) as expires from public.promo_codes where code = ${data.code} limit 1`;
+    const rows = await sql`select max_redemptions, to_json(expires_at) as expires from public.rout_promo_admin_terms(${data.code})`;
     const row = rows[0];
     if (!row) throw new Error("gift_not_available");
     const { sendAdminGift, storedGiftRecipient, giftMailAuditNote } = await import("./admin-gift-issue.server");

@@ -6,7 +6,13 @@
 - [x] Batch 3 expand — db/0228_oauth_rpc.sql live on Neon + code uses it (tests: oauth-rpc, purge-read-repair)
 - [ ] Batch 3 contract — db-pending/0230_oauth_lockdown.sql, waits until Vercel runs the new code
 - [ ] Seal the legacy plaintext signing key (scripts/seal-signing-keys.ts, needs ROUT_PROVIDER_SIGNING_KEK)
-- [ ] Batch 4 — payments, vouchers, pricing lockdown (db/0229_payments_and_promos_rpc.sql); inventory done: ~30 files, many no-session webhook/cron/SEPA paths
-- [ ] Update roadmap of remaining rout_server tables after batch 3+4
+- [x] Batch 4 expand — db/0229_payments_and_promos_rpc.sql live on Neon (source hash verified, live flows tested as rout_app with rollback) + code uses it (tests: payments-rpc)
+- [ ] Batch 4 contract — db-pending/0231_payments_lockdown.sql, waits until Vercel runs the new code
+- [x] Inventory remaining rout_server tables (49 total: 12 covered by 0230/0231, 37 still open)
+- [ ] Batch 5 — anti-abuse & no-session auth: altcha_used, signin_throttle, rate_limits, upload_rate_limits, login_codes, fediverse_email_otp, telegram_verify_sessions, mastodon_app_registrations
+- [ ] Batch 6 — security logs & webhooks: security_audit_logs, security_events, webhook_events, webhook_deliveries, sepa_review_queue
+- [ ] Batch 7 — identity, credentials & entitlements: credential_issue_requests, credential_issuer_blocks, identity_labels, account_merge_tickets, api_keys, reserved_handles, badges, entitlement_overrides, referrals, didit_monthly_usage
+- [ ] Batch 8 — public profile & analytics: links, profile_link_clicks, qr_scans, poll_votes, showcase_profiles, lead_captures, contact_submissions, onboarding_drafts
+- [ ] Batch 9 — agenda, jobs & caches: availability_jobs, booking_requests, alias_sync_jobs, forwarding_confirmation_sends, ambient_weather_cache, platform_integration_switches
 - [ ] Investigate migration drift: 0209/91 checksum differ, 95_question_stories + 0169_workspace_icon renamed
 - [ ] Blocked: recovery ceremony (2-of-3) until all rout_server policies are gone
