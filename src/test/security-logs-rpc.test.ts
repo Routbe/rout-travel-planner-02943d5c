@@ -144,7 +144,9 @@ describe("hash-chained audit log", () => {
     const [head] = await asApp("select id::int as id, n::int as n from public.rout_audit_head(current_date)");
     expect(head).toEqual({ id: 2, n: 2 });
     await expect(asApp("select public.rout_audit_write('login', null, null, 'NOT-HEX', null, '{}')")).rejects.toThrow(/invalid audit entry/);
-    await expect(asApp("delete from public.security_audit_logs")).rejects.toThrow(/append-only/);
+    // Outside a due purge the app sees no rows to delete; the owner hits the append-only trigger.
+    expect(await appCount("delete from public.security_audit_logs", [], "")).toBe(0);
+    await expect(owner("delete from public.security_audit_logs")).rejects.toThrow(/append-only/);
   });
 
   it("retention removes only rows older than 365 days", async () => {
