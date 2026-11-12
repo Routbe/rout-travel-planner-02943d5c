@@ -37,7 +37,6 @@ export const startVerification = createServerFn({ method: "POST" })
     const { stripeKey, createCheckoutSession, normalizeDonationPlan, trustedCheckoutOrigin } =
       await import("./verification.server");
     const { clampContribution } = await import("./contributions");
-    const { dbAdmin } = await import("@/lib/db/admin.server");
 
     // Check the provider BEFORE writing a payment row: an unconfigured Stripe
     // would otherwise leave an orphan pending payment behind on every click.
@@ -154,7 +153,6 @@ export const startCardPaymentIntent = createServerFn({ method: "POST" })
     const baseCents = await bestPriceCents("card", promo, context.userId);
     const totalCents = baseCents + donationCents;
 
-    const { dbAdmin } = await import("@/lib/db/admin.server");
     const { sql } = await import("@/lib/neon");
     const email = (context.claims as { email?: string } | null)?.email ?? null;
 
@@ -353,7 +351,6 @@ export const startSepaVerification = createServerFn({ method: "POST" })
     if (!legal.ok) return { ok: false as const, reason: legal.reason };
 
     const { clampContribution } = await import("./contributions");
-    const { dbAdmin } = await import("@/lib/db/admin.server");
 
     const reference = `ROUT-${Math.floor(1000 + Math.random() * 9000)}`;
     const donationPlan = normalizeDonationPlan(data.donationPlan ?? "none");
