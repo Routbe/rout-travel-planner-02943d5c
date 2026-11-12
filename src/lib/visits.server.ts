@@ -286,28 +286,12 @@ export async function recordLinkClick(input: {
   if (recentClicks.size > 5000) {
     for (const [k, at] of recentClicks) if (now - at > CLICK_DEDUPE_MS) recentClicks.delete(k);
   }
-  const owner = (await sql`
-    select id from public.profiles where lower(username) = ${handle} limit 1
+  // The database resolves the owner from the public handle (db/0238).
+  const rows = (await sql`
+    select public.rout_link_click_record(${handle}, ${blockId}, ${(input.label ?? "").slice(0, 120) || null},
+      ${input.space === "root" ? "root" : "alias"}, ${visitorHash}) as recorded
   `) as Row[];
-  let ownerId = (owner[0]?.["id"] as string | undefined) ?? null;
-  if (!ownerId) {
-    try {
-      const alias = (await sql`
-        select user_id from public.alias_profiles where lower(handle) = ${handle} limit 1
-      `) as Row[];
-      ownerId = (alias[0]?.["user_id"] as string | undefined) ?? null;
-    } catch {
-      ownerId = null;
-    }
-  }
-  if (!ownerId) return { recorded: false };
-  await sql`
-    insert into public.profile_link_clicks
-      (profile_user_id, handle, block_id, label, space, visitor_hash)
-    values (${ownerId}, ${handle}, ${blockId}, ${(input.label ?? "").slice(0, 120) || null},
-            ${input.space === "root" ? "root" : "alias"}, ${visitorHash})
-  `;
-  return { recorded: true };
+  return { recorded: rows[0]?.["recorded"] === true };
 }
 
 export type LinkClickStats = {

@@ -175,9 +175,9 @@ export async function logScan(input: {
   browser: string | null;
   os: string | null;
 }) {
+  // Capped at 60 scans per code per minute inside the database (db/0238).
   await sql`
-    insert into public.qr_scans (tracked_qr_id, device, country, browser, os)
-    values (${input.trackedQrId}, ${input.device}, ${input.country}, ${input.browser}, ${input.os})
+    select public.log_qr_scan(${input.trackedQrId}::uuid, ${input.device}, ${input.country}, ${input.browser}, ${input.os})
   `;
 }
 
@@ -186,18 +186,9 @@ export async function logScan(input: {
 // ---------------------------------------------------------------------------
 
 export async function getStatsByToken(token: string) {
-  const rows = (await sql`
-    select * from public.tracked_qrs where dashboard_token = ${token} limit 1
-  `) as Row[];
-  const qr = rows[0];
-  if (!qr) return null;
-  const scans = (await sql`
-    select scanned_at, country, device, browser, os
-      from public.qr_scans
-     where tracked_qr_id = ${qr["id"] as string}
-     order by scanned_at desc
-  `) as Row[];
-  return { qr, scans };
+  const rows = (await sql`select public.short_link_stats(${token}) as stats`) as Row[];
+  const stats = rows[0]?.["stats"] as { qr: Row; scans: Row[] } | null | undefined;
+  return stats ? { qr: stats.qr, scans: stats.scans } : null;
 }
 
 export async function manageByToken(
