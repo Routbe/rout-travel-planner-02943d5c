@@ -15,6 +15,15 @@ const MEMBER = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const ENDPOINT = "33333333-3333-4333-8333-333333333333";
 
+async function appCount(query: string, params: unknown[], purge: string): Promise<number> {
+  await db.query("select set_config('test.admin', 'off', false), set_config('rout.purge_user_id', $1, false)", [purge]);
+  await db.exec("set role rout_app");
+  try {
+    return (await db.query(query, params)).affectedRows ?? 0;
+  } finally {
+    await db.exec("reset role");
+  }
+}
 async function asApp(query: string, params: unknown[] = [], opts: { admin?: boolean; purge?: string } = {}): Promise<Row[]> {
   await db.query("select set_config('test.admin', $1, false), set_config('rout.purge_user_id', $2, false)",
     [opts.admin ? "on" : "off", opts.purge ?? ""]);
@@ -42,6 +51,7 @@ beforeAll(async () => {
                        and d.completed_at is null and d.purge_after <= now()) $$;
     grant execute on function public.rout_caller_is_admin() to rout_app;
     grant execute on function public.rout_purge_due(uuid) to rout_app;
+    grant select on public.account_deletions to rout_app;
     create table public.security_audit_checkpoints (day date primary key, last_id bigint, last_hash text, row_count bigint, signature text);
     create table public.security_audit_logs (id bigserial primary key, event_type text not null, user_id text, actor_id text,
       ip_hash text, user_agent_hash text, payload_json jsonb not null default '{}', prev_hash text not null, current_hash text not null,
@@ -145,10 +155,10 @@ describe("hash-chained audit log", () => {
   });
 
   it("a due account purge deletes only that member's entries", async () => {
-    expect(await asApp("delete from public.security_audit_logs where user_id = $1 returning id", [MEMBER], { purge: MEMBER })).toHaveLength(0);
+    expect(await appCount("delete from public.security_audit_logs where user_id = $1", [MEMBER], MEMBER)).toBe(0);
     await owner("insert into public.account_deletions (user_id, purge_after) values ($1, now() - interval '1 day')", [MEMBER]);
-    expect(await asApp("delete from public.security_audit_logs where user_id = $1 returning id", [MEMBER], { purge: MEMBER })).toHaveLength(1);
-    expect(await asApp("delete from public.security_audit_logs where user_id = $1 returning id", [OTHER], { purge: MEMBER })).toHaveLength(0);
+    expect(await appCount("delete from public.security_audit_logs where user_id = $1", [MEMBER], MEMBER)).toBe(1);
+    expect(await appCount("delete from public.security_audit_logs where user_id = $1", [OTHER], MEMBER)).toBe(0);
   });
 });
 
@@ -203,6 +213,6 @@ describe("SEPA review queue", () => {
   });
 
   it("a due purge deletes the member's reviews", async () => {
-    expect(await asApp("delete from public.sepa_review_queue where user_id = $1 returning id", [MEMBER], { purge: MEMBER })).toHaveLength(1);
+    expect(await appCount("delete from public.sepa_review_queue where user_id = $1", [MEMBER], MEMBER)).toBe(1);
   });
 });
