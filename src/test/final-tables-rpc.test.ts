@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * db/0238 + db/0240 and their contracts db-pending/0239 + 0241 over the real SQL
+ * db/0238 + db/0240 and their contracts db/0239 + 0241 over the real SQL
  * (PGlite, as rout_app): the last 14 tables with free app access are closed.
  * Covers the owner's rules: one poll vote per voter, QR scans and link clicks
  * visible only to their owner (or colleagues/admins), forms only for profiles
@@ -98,8 +98,8 @@ beforeAll(async () => {
       create policy rout_server on public.${t} to rout_app using (true) with check (true);`);
   }
   await db.exec("grant usage on sequence public.profile_link_clicks_id_seq, public.forwarding_confirmation_sends_id_seq to rout_app");
-  for (const f of ["db/0238_public_profiles_stats_rpc.sql", "db-pending/0239_public_profiles_stats_lockdown.sql",
-    "db/0240_agenda_jobs_cache_rpc.sql", "db-pending/0241_agenda_jobs_cache_lockdown.sql"]) {
+  for (const f of ["db/0238_public_profiles_stats_rpc.sql", "db/0239_public_profiles_stats_lockdown.sql",
+    "db/0240_agenda_jobs_cache_rpc.sql", "db/0241_agenda_jobs_cache_lockdown.sql"]) {
     await db.exec(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"));
   }
   await owner(`insert into public.qr_scans (tracked_qr_id) values ('${QA}'), ('${QA}'), ('${QW}')`);
