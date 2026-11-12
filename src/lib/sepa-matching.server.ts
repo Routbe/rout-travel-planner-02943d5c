@@ -49,17 +49,12 @@ function expectedCents(payment: PaymentRow): number {
  */
 async function recordInboundEvent(reference: string | null): Promise<void> {
   try {
-    const { dbAdmin } = await import("@/lib/db/admin.server");
+    const { sql } = await import("@/lib/neon");
     const id = reference
       ? `inbound:${reference}`
       : `inbound:UNMATCHED-${Date.now().toString(36).toUpperCase()}`;
-    const { error } = await dbAdmin.from("webhook_events").insert({
-      id,
-      source: "banking",
-      kind: "payment_email",
-    });
-    // 23505 = same reference already logged; the queue only needs one row.
-    if (error && error.code !== "23505") console.error("[sepa-match] event log failed", error);
+    // The same reference logged twice keeps one row (the function ignores the repeat).
+    await sql`select public.rout_webhook_event_record(${id}, 'banking', 'payment_email', 'inbound', null, 'processing')`;
   } catch (error) {
     console.error("[sepa-match] event log threw", error);
   }
@@ -393,13 +388,13 @@ async function activate(
       amountCents === null ? "amount unknown" : `${(amountCents / 100).toFixed(2)} EUR`
     }).`);
 
-  await dbAdmin.from("security_events").insert({
-    user_id: payment.user_id,
+  await (await import("./security-events.server")).writeSecurityEvent({
+    userId: payment.user_id,
     kind: "verification_activated",
     severity: "info",
     message: `Payment auto-verified from bank e-mail (${reference}).`,
     details: { payment_id: payment.id, reference, level: 1, amount_cents: amountCents },
-  });
+  }).catch((error) => console.error("[security-event] write failed", error));
 
   console.info("[sepa-match] level 1 activated", { paymentId: payment.id, reference });
 

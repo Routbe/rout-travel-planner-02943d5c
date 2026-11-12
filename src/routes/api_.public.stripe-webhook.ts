@@ -31,18 +31,10 @@ export const Route = createFileRoute("/api_/public/stripe-webhook")({
         // slaagde; alleen een eerder gefaalde poging wordt heropend.
         if (eventId) {
           try {
-            const claimed = (await sql`
-              insert into public.webhook_events (id, source, kind, status, direction)
-              values (${eventId}, 'stripe', ${kind}, 'processing', 'inbound')
-              on conflict (id) do update
-                 set status = 'processing',
-                     attempts = public.webhook_events.attempts + 1,
-                     error = null,
-                     updated_at = now()
-               where public.webhook_events.status = 'failed'
-              returning id, attempts
-            `) as { id: string; attempts: number }[];
-            if (claimed.length === 0) {
+            const [claim] = (await sql`
+              select public.rout_webhook_event_claim(${eventId}, 'stripe', ${kind}) as claimed
+            `) as { claimed: boolean }[];
+            if (claim?.claimed !== true) {
               console.info("[stripe-webhook] duplicaat overgeslagen", { eventId, kind });
               return new Response("duplicate", { status: 200 });
             }
@@ -62,12 +54,7 @@ export const Route = createFileRoute("/api_/public/stripe-webhook")({
         try {
           const result = await applyStripeEvent(event);
           if (eventId) {
-            await sql`
-              update public.webhook_events
-                 set status = 'done', result = ${result ?? null}, http_status = 200, direction = 'inbound',
-                     completed_at = now(), updated_at = now()
-               where id = ${eventId}
-            `;
+            await sql`select public.rout_webhook_event_finish(${eventId}, 'done', ${result ?? null}, null, 200)`;
           }
           console.info("[stripe-webhook] verwerkt", { eventId, kind, result });
           return new Response(result, { status: 200 });
@@ -80,11 +67,8 @@ export const Route = createFileRoute("/api_/public/stripe-webhook")({
             stack: err instanceof Error ? err.stack : undefined,
           });
           if (eventId) {
-            await sql`
-              update public.webhook_events
-                 set status = 'failed', error = ${message.slice(0, 500)}, http_status = 500, direction = 'inbound', updated_at = now()
-               where id = ${eventId}
-            `.catch(() => undefined);
+            await sql`select public.rout_webhook_event_finish(${eventId}, 'failed', null, ${message.slice(0, 500)}, 500)`
+              .catch(() => undefined);
           }
           // 500 laat Stripe opnieuw leveren; de claim staat op 'failed' en mag heropend worden.
           return new Response("Processing failed", { status: 500 });

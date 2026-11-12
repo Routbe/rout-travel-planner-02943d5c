@@ -10,9 +10,7 @@ type Row = Record<string, unknown>;
 /** Telt de referrals opnieuw uit de graaf en schrijft ze op het profiel. */
 async function syncCounters(inviterId: string): Promise<ReferralStats> {
   const rows = (await sql`
-    select count(*)::int as invited,
-           count(*) filter (where verified)::int as verified_invites
-      from public.referrals where inviter_id = ${inviterId}
+    select invited, verified_invites from public.rout_referral_counts(${inviterId}::uuid)
   `) as Row[];
   const invited = Number(rows[0]?.["invited"] ?? 0);
   const verifiedInvites = Number(rows[0]?.["verified_invites"] ?? 0);
@@ -57,16 +55,11 @@ export async function claimReferralForUser(
   `.catch(() => [])) as Row[];
   if (fresh.length === 0) return { ok: false, reason: "not_eligible" };
 
-  const existing = (await sql`
-    select 1 from public.referrals where invitee_id = ${inviteeId} limit 1
+  // The database re-checks self-referral and the 24-hour window, and keeps one inviter per member (db/0236).
+  const [claim] = (await sql`
+    select public.rout_referral_claim(${inviterId}::uuid, ${inviteeId}::uuid) as claimed
   `) as Row[];
-  if (existing.length > 0) return { ok: false, reason: "already_referred" };
-
-  await sql`
-    insert into public.referrals (inviter_id, invitee_id)
-    values (${inviterId}, ${inviteeId})
-    on conflict (invitee_id) do nothing
-  `;
+  if (claim?.["claimed"] !== true) return { ok: false, reason: "already_referred" };
   await sql`update public.profiles set referred_by = ${inviterId} where id = ${inviteeId}`;
   await syncCounters(inviterId);
   return { ok: true };
@@ -76,9 +69,7 @@ export async function claimReferralForUser(
 export async function markInviteVerified(inviteeId: string): Promise<void> {
   try {
     const rows = (await sql`
-      update public.referrals set verified = true, verified_at = now()
-       where invitee_id = ${inviteeId} and verified = false
-       returning inviter_id
+      select inviter_id from public.rout_referral_mark_verified(${inviteeId}::uuid) as inviter_id where inviter_id is not null
     `) as Row[];
     const inviterId = rows[0]?.["inviter_id"] as string | undefined;
     if (inviterId) await syncCounters(inviterId);
@@ -93,9 +84,7 @@ export async function referralStatsFor(
   let stats: ReferralStats = { invited: 0, verifiedInvites: 0 };
   try {
     const rows = (await sql`
-      select count(*)::int as invited,
-             count(*) filter (where verified)::int as verified_invites
-        from public.referrals where inviter_id = ${userId}
+      select invited, verified_invites from public.rout_referral_counts(${userId}::uuid)
     `) as Row[];
     stats = {
       invited: Number(rows[0]?.["invited"] ?? 0),

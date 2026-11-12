@@ -34,12 +34,9 @@ export async function createMergeTicket(primaryUserId: string) {
   const pin = randomPin();
   const token = generateToken(24);
   const [pinHash, tokenHash] = await Promise.all([hashToken(pin), hashToken(token)]);
-  await sql`update public.account_merge_tickets set used_at = now()
-     where primary_user_id = ${primaryUserId} and used_at is null`;
+  // Retires older open tickets and stores the new one in one database call (db/0236).
   const rows = (await sql`
-    insert into public.account_merge_tickets (primary_user_id, pin_hash, token_hash, expires_at)
-    values (${primaryUserId}, ${pinHash}, ${tokenHash}, now() + make_interval(mins => ${TICKET_TTL_MINUTES}))
-    returning id, expires_at`) as Row[];
+    select id, expires_at from public.rout_merge_ticket_create(${primaryUserId}::uuid, ${pinHash}, ${tokenHash}, ${TICKET_TTL_MINUTES}::int)`) as Row[];
   const expiresAt = String(rows[0]?.["expires_at"]);
   try {
     const { notifyUser } = await import("./notifications.server");
@@ -54,11 +51,9 @@ export async function createMergeTicket(primaryUserId: string) {
 /** Failed redeem attempts in the window; null when unknown (callers fail closed). */
 async function countMergeFailures(userId: string): Promise<number | null> {
   try {
-    const { sha256Hex } = await import("./rate-limit-db.server");
-    const bucket = `merge-redeem-fail:${await sha256Hex(userId)}`;
-    const rows = (await sql`select coalesce(sum(hits), 0)::int as hits from public.rate_limits
-       where bucket = ${bucket} and window_start > now() - make_interval(mins => ${TICKET_TTL_MINUTES * 2})`) as Row[];
-    return Number(rows[0]?.["hits"] ?? 0);
+    // Same bucket that hitRateLimit("merge-redeem-fail", …) writes (0232).
+    const { peekRateLimit } = await import("./rate-limit-db.server");
+    return await peekRateLimit("merge-redeem-fail", userId, TICKET_TTL_MINUTES * 2 * 60);
   } catch (error) {
     console.error("[merge] failure counter unavailable", (error as Error)?.message);
     return null;
@@ -67,9 +62,7 @@ async function countMergeFailures(userId: string): Promise<number | null> {
 
 async function findTicket(pin: string | null, token: string | null) {
   const hash = await hashToken((pin ?? token ?? "").trim());
-  const rows = (await sql`select id, primary_user_id, preview_user_id, expires_at from public.account_merge_tickets
-     where used_at is null and expires_at > now() and (pin_hash = ${hash} or token_hash = ${hash})
-     order by created_at desc limit 1`) as Row[];
+  const rows = (await sql`select id, primary_user_id, preview_user_id, expires_at from public.rout_merge_ticket_find(${hash})`) as Row[];
   return rows[0] ?? null;
 }
 
@@ -115,10 +108,8 @@ export async function previewMerge(input: { secondaryUserId: string; pin?: strin
   const ticket = found.ticket;
   if (!ticket) return { ok: false as const, reason: "invalid_or_expired" as const };
   // Bind the ticket to the first account that previews it; nobody else can redeem it.
-  const bound = (await sql`update public.account_merge_tickets set preview_user_id = ${input.secondaryUserId}
-    where id = ${ticket["id"] as string} and used_at is null
-      and (preview_user_id is null or preview_user_id = ${input.secondaryUserId}) returning id`) as Row[];
-  if (!bound.length) return { ok: false as const, reason: "invalid_or_expired" as const };
+  const [bound] = (await sql`select public.rout_merge_ticket_bind(${ticket["id"] as string}::uuid, ${input.secondaryUserId}::uuid) as ok`) as Row[];
+  if (bound?.["ok"] !== true) return { ok: false as const, reason: "invalid_or_expired" as const };
   const { issueSecurityCode } = await import("./security-code.server");
   const sent = await issueSecurityCode(input.secondaryUserId, "merge", input.request);
   if (!sent.ok) return { ok: false as const, reason: sent.reason };

@@ -52,33 +52,18 @@ export function generateCode(): string {
   return String(buf[0]! % 1_000_000).padStart(6, "0");
 }
 
-type Row = { email: string; code_hash: string; attempts: number; locked_until: string | null; expires_at: string };
-
-async function readRow(key: string): Promise<Row | null> {
-  const rows = (await sql`
-    select email, code_hash, attempts, locked_until, expires_at
-      from public.fediverse_email_otp where pending_key = ${key}`) as Row[];
-  return rows[0] ?? null;
-}
-
 export class OtpError extends Error {}
 
 /** Maakt (of vervangt) de code en verstuurt ze. Een slot blijft gerespecteerd. */
 export async function issueCode(pendingRaw: string, email: string): Promise<void> {
   const key = await sha256(pendingRaw);
-  const existing = await readRow(key);
-  if (existing?.locked_until && Date.parse(existing.locked_until) > Date.now()) {
-    throw new OtpError("Te veel pogingen. Probeer het over 15 minuten opnieuw.");
-  }
   const code = generateCode();
   const codeHash = await sha256(`${key}|${email}|${code}`);
-  const expires = new Date(Date.now() + OTP_TTL_MS).toISOString();
-  await sql`
-    insert into public.fediverse_email_otp (pending_key, email, code_hash, attempts, locked_until, expires_at)
-    values (${key}, ${email}, ${codeHash}, 0, null, ${expires})
-    on conflict (pending_key) do update
-      set email = excluded.email, code_hash = excluded.code_hash,
-          attempts = 0, locked_until = null, expires_at = excluded.expires_at, created_at = now()`;
+  // 0232: the database keeps an active lock and resets the try counter.
+  const rows = (await sql`select public.rout_stateless_otp_issue('fediverse', ${key}, ${codeHash}, ${email}, ${OTP_TTL_MS / 1000}) as r`) as {
+    r: string;
+  }[];
+  if (rows[0]?.r === "locked") throw new OtpError("Te veel pogingen. Probeer het over 15 minuten opnieuw.");
 
   const { sendTransactionalEmail } = await import("@/lib/notifications.server");
   await sendTransactionalEmail({
@@ -95,26 +80,26 @@ export async function issueCode(pendingRaw: string, email: string): Promise<void
 /** Controleert de code. Geeft het bevestigde e-mailadres terug. */
 export async function verifyCode(pendingRaw: string, code: string): Promise<string> {
   const key = await sha256(pendingRaw);
-  const row = await readRow(key);
-  if (!row) throw new OtpError("Vraag eerst een code aan.");
-  if (row.locked_until && Date.parse(row.locked_until) > Date.now()) {
-    throw new OtpError("Te veel pogingen. Probeer het over 15 minuten opnieuw.");
+  // 0232: the code is checked, counted and locked inside the database; the
+  // stored hash never comes back to the app.
+  const rows = (await sql`select * from public.rout_stateless_otp_verify('fediverse', ${key}, ${code.trim()})`) as {
+    outcome: string;
+    payload: string | null;
+    attempts_left: number | null;
+  }[];
+  const result = rows[0];
+  switch (result?.outcome) {
+    case "ok":
+      if (result.payload) return result.payload;
+      break;
+    case "missing":
+      throw new OtpError("Vraag eerst een code aan.");
+    case "expired":
+      throw new OtpError("Deze code is verlopen. Vraag een nieuwe aan.");
+    case "locked":
+      throw new OtpError("Te veel foute pogingen. Probeer het over 15 minuten opnieuw.");
+    case "wrong":
+      throw new OtpError(`Onjuiste code. Nog ${Math.max(0, Number(result.attempts_left ?? 0))} poging(en).`);
   }
-  if (Date.parse(row.expires_at) < Date.now()) throw new OtpError("Deze code is verlopen. Vraag een nieuwe aan.");
-
-  const expected = await sha256(`${key}|${row.email}|${code}`);
-  if (!safeEqual(expected, row.code_hash)) {
-    const attempts = row.attempts + 1;
-    const lock = attempts >= OTP_MAX_ATTEMPTS ? new Date(Date.now() + OTP_LOCK_MS).toISOString() : null;
-    await sql`update public.fediverse_email_otp
-                 set attempts = ${attempts}, locked_until = ${lock}
-               where pending_key = ${key}`;
-    throw new OtpError(
-      lock
-        ? "Te veel foute pogingen. Probeer het over 15 minuten opnieuw."
-        : `Onjuiste code. Nog ${OTP_MAX_ATTEMPTS - attempts} poging(en).`,
-    );
-  }
-  await sql`delete from public.fediverse_email_otp where pending_key = ${key}`;
-  return row.email;
+  throw new OtpError("Vraag eerst een code aan.");
 }

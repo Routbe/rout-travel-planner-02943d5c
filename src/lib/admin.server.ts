@@ -154,8 +154,7 @@ export async function approvePayment(paymentId: string, adminId: string) {
   `;
 
   await sql`
-    insert into public.security_events (user_id, kind, severity, message, details)
-    values (${payment["user_id"]}, 'verification_approved_manually', 'info', 'Your ROUT verification is live!',
+    select public.rout_security_event_write(${payment["user_id"]}, 'verification_approved_manually', 'info', 'Your ROUT verification is live!',
       ${JSON.stringify({
         payment_id: payment["id"],
         reference: payment["reference_code"],
@@ -219,8 +218,7 @@ export async function resolveIncompletePayment(
   `;
 
   await sql`
-    insert into public.security_events (user_id, kind, severity, message, details)
-    values (${payment["user_id"]}, ${action === "fail" ? "payment_failed_manually" : "payment_retry_manually"},
+    select public.rout_security_event_write(${payment["user_id"]}, ${action === "fail" ? "payment_failed_manually" : "payment_retry_manually"},
       ${action === "fail" ? "warning" : "info"},
       ${
         action === "fail"
@@ -325,8 +323,7 @@ export async function overrideUser(opts: {
   }
 
   await sql`
-    insert into public.security_events (user_id, kind, severity, message, details)
-    values (${opts.userId}, 'admin_override', 'warning', 'Profile updated by an administrator.',
+    select public.rout_security_event_write(${opts.userId}, 'admin_override', 'warning', 'Profile updated by an administrator.',
       ${JSON.stringify({ ...patch, admin_id: opts.adminId })})
   `;
 
@@ -428,8 +425,7 @@ export async function setPaymentStatus(
 
   if (status === "failed") {
     await sql`
-      insert into public.security_events (user_id, kind, severity, message, details)
-      values (${payment["user_id"]}, 'verification_rejected', 'warning',
+      select public.rout_security_event_write(${payment["user_id"]}, 'verification_rejected', 'warning',
         'We could not match your verification payment.',
         ${JSON.stringify({
           payment_id: payment["id"],

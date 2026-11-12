@@ -20,17 +20,14 @@ export async function telegramSend(botToken: string, chatId: number, text: strin
 
 export async function rememberContact(chatId: number, phone: string) {
   const enc = await encryptText(phone, secret());
-  await sql`insert into public.telegram_verify_sessions (chat_id, phone_enc, expires_at)
-    values (${chatId}, ${enc}, now() + interval '15 minutes')
-    on conflict (chat_id) do update set phone_enc = excluded.phone_enc, expires_at = excluded.expires_at`;
+  await sql`select public.rout_telegram_contact_remember(${chatId}, ${enc})`;
 }
 
 export async function contactFor(chatId: number): Promise<string | null> {
-  const rows = (await sql`select phone_enc from public.telegram_verify_sessions
-    where chat_id = ${chatId} and expires_at > now() limit 1`) as { phone_enc: string }[];
-  return rows[0] ? decryptText(rows[0].phone_enc, secret()) : null;
+  const rows = (await sql`select public.rout_telegram_contact_get(${chatId}) as phone_enc`) as { phone_enc: string | null }[];
+  return rows[0]?.phone_enc ? decryptText(rows[0].phone_enc, secret()) : null;
 }
 
 export async function forgetContact(chatId: number) {
-  await sql`delete from public.telegram_verify_sessions where chat_id = ${chatId}`;
+  await sql`select public.rout_telegram_contact_forget(${chatId})`;
 }

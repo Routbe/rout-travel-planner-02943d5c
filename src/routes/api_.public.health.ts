@@ -5,7 +5,8 @@ import { createFileRoute } from "@tanstack/react-router";
  *
  * Deliberately privacy-clean: nothing about the caller is read, stored or
  * logged — the handler only reports whether the app can reach its Neon
- * Postgres database and how long that round-trip took.
+ * Postgres database, how long that round-trip took, and which migration level
+ * this deployment's code expects (used before applying held-back lockdowns).
  */
 export const Route = createFileRoute("/api_/public/health")({
   server: {
@@ -21,8 +22,9 @@ export const Route = createFileRoute("/api_/public/health")({
           status = "degraded";
         }
 
+        const { CODE_SCHEMA_LEVEL } = await import("@/lib/schema-version");
         return Response.json(
-          { status, latency_ms: Date.now() - started },
+          { status, latency_ms: Date.now() - started, schema: CODE_SCHEMA_LEVEL },
           { headers: { "cache-control": "no-store" } },
         );
       },

@@ -83,9 +83,7 @@ async function readRegistrationCache(cacheKey: string): Promise<AppCredentials |
   const [instance, redirectUri] = cacheKey.split("|");
   try {
     const { sql } = await import("./neon");
-    const rows = (await sql`
-      select client_id, client_secret from public.mastodon_app_registrations
-       where instance = ${instance} and redirect_uri = ${redirectUri} limit 1`) as {
+    const rows = (await sql`select * from public.rout_mastodon_app_get(${instance}, ${redirectUri})`) as {
       client_id: string;
       client_secret: string;
     }[];
@@ -100,10 +98,7 @@ async function writeRegistrationCache(cacheKey: string, creds: AppCredentials): 
   const [instance, redirectUri] = cacheKey.split("|");
   try {
     const { sql } = await import("./neon");
-    await sql`
-      insert into public.mastodon_app_registrations (instance, redirect_uri, client_id, client_secret)
-      values (${instance}, ${redirectUri}, ${creds.clientId}, ${creds.clientSecret})
-      on conflict (instance, redirect_uri) do nothing`;
+    await sql`select public.rout_mastodon_app_put(${instance}, ${redirectUri}, ${creds.clientId}, ${creds.clientSecret})`;
   } catch {
     /* cache miss is fine: the in-memory map still covers this run */
   }

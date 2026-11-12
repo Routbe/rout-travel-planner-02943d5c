@@ -532,8 +532,7 @@ export async function activateVerification(paymentId: string, providerRef: strin
   `;
 
   await sql`
-    insert into public.security_events (user_id, kind, severity, message, details)
-    values (${userId}, 'verification_activated', 'info',
+    select public.rout_security_event_write(${userId}, 'verification_activated', 'info',
             ${`Early Believer verification activated (${payment["tier"] as string}).`},
             ${JSON.stringify({ payment_id: payment["id"] })})
   `;
@@ -624,8 +623,7 @@ export async function markPaymentStatus(
 
   const userId = payment["user_id"] as string;
   await sql`
-    insert into public.security_events (user_id, kind, severity, message, details)
-    values (${userId}, ${`payment_${status}`}, ${status === "processing" ? "info" : "warning"},
+    select public.rout_security_event_write(${userId}, ${`payment_${status}`}, ${status === "processing" ? "info" : "warning"},
             ${`Verification payment ${status}${reason ? `: ${reason}` : ""}.`},
             ${JSON.stringify({ payment_id: payment["id"], ...(reason ? { reason } : {}) })})
   `;
@@ -681,8 +679,7 @@ export async function revokeVerification(paymentId: string, reason: string) {
   });
 
   await sql`
-    insert into public.security_events (user_id, kind, severity, message, details)
-    values (${userId}, 'verification_revoked', 'warning', ${`Verification revoked (${reason}).`},
+    select public.rout_security_event_write(${userId}, 'verification_revoked', 'warning', ${`Verification revoked (${reason}).`},
             ${JSON.stringify({ payment_id: payment["id"], reason })})
   `;
 
@@ -706,8 +703,7 @@ export async function endRecurringDonation(paymentId: string) {
   await revokeBadges(userId, ["supporter"], "subscription", { payment_id: payment["id"] });
 
   await sql`
-    insert into public.security_events (user_id, kind, severity, message, details)
-    values (${userId}, 'donation_cancelled', 'info', 'Recurring ROUT donation cancelled.',
+    select public.rout_security_event_write(${userId}, 'donation_cancelled', 'info', 'Recurring ROUT donation cancelled.',
             ${JSON.stringify({ payment_id: payment["id"] })})
   `;
 
