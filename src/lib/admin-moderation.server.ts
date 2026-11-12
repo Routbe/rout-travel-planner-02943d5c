@@ -282,7 +282,7 @@ export async function setSuspension(opts: {
     action: opts.suspended ? "profile_suspended" : "profile_unsuspended",
     targetUserId: opts.userId,
     notes: opts.reason ?? null,
-  }).catch((error) => console.error("[security-event] write failed", error));
+  });
 
   return { ok: true as const };
 }
@@ -421,7 +421,7 @@ export async function changeHandle(opts: {
     ]
       .filter(Boolean)
       .join(" · "),
-  }).catch((error) => console.error("[security-event] write failed", error));
+  });
 
   return { ok: true as const, handle, vip: Boolean(grant), alias, reason };
 }
@@ -724,7 +724,7 @@ export async function markUserPaid(opts: {
     action: opts.paid ? "MANUAL_PAYMENT_VERIFICATION" : "manual_payment_revoked",
     targetUserId: opts.userId,
     notes: opts.note ?? `alias sync: ${sync.done} synced, ${sync.failed} failed`,
-  }).catch((error) => console.error("[security-event] write failed", error));
+  });
 
   return { ok: true as const, sync };
 }
@@ -1192,7 +1192,7 @@ export async function revokeVipGrant(opts: {
       [profile.username ? `@${profile.username}` : null, opts.reason?.trim() || null]
         .filter(Boolean)
         .join(" · ") || null,
-  }).catch((error) => console.error("[security-event] write failed", error));
+  });
 
   return { ok: true as const };
 }
