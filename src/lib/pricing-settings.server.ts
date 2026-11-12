@@ -18,11 +18,9 @@ type Row = Record<string, unknown>;
 export async function getPricing(force = false): Promise<PricingSettings> {
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   try {
-    const rows = (await sql`
-      select verification_base_cents, fee_card_cents, fee_bunq_cents, fee_sepa_cents, min_donation_cents
-        from public.pricing_settings where id = 1 limit 1
-    `) as Row[];
-    const row = rows[0];
+    // 0229: the table is reachable only through rout_pricing_get / rout_pricing_set.
+    const rows = (await sql`select public.rout_pricing_get() as p`) as Row[];
+    const row = (rows[0]?.["p"] ?? null) as Row | null;
     const value = sanitizePricing(
       row
         ? {
@@ -44,25 +42,19 @@ export async function getPricing(force = false): Promise<PricingSettings> {
   }
 }
 
-/** Schrijft nieuwe prijzen weg en ververst de cache direct. */
+/**
+ * Schrijft nieuwe prijzen weg en ververst de cache direct. De database
+ * controleert zelf dat de aanroeper admin is en noteert hem als `updated_by`;
+ * `_updatedBy` blijft enkel voor de bestaande aanroepers.
+ */
 export async function savePricing(
   input: Partial<PricingSettings>,
-  updatedBy: string | null,
+  _updatedBy: string | null,
 ): Promise<PricingSettings> {
   const value = sanitizePricing(input);
   await sql`
-    insert into public.pricing_settings
-      (id, verification_base_cents, fee_card_cents, fee_bunq_cents, fee_sepa_cents, min_donation_cents, updated_at, updated_by)
-    values (1, ${value.baseCents}, ${value.feeCents.card}, ${value.feeCents.bunq},
-            ${value.feeCents.sepa}, ${value.minDonationCents}, now(), ${updatedBy})
-    on conflict (id) do update set
-      verification_base_cents = excluded.verification_base_cents,
-      fee_card_cents = excluded.fee_card_cents,
-      fee_bunq_cents = excluded.fee_bunq_cents,
-      fee_sepa_cents = excluded.fee_sepa_cents,
-      min_donation_cents = excluded.min_donation_cents,
-      updated_at = now(),
-      updated_by = excluded.updated_by
+    select public.rout_pricing_set(${value.baseCents}, ${value.feeCents.card}, ${value.feeCents.bunq},
+                                   ${value.feeCents.sepa}, ${value.minDonationCents})
   `;
   cache = { value, at: Date.now() };
   return value;
