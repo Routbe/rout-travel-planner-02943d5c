@@ -54,11 +54,8 @@ async function alertAdmin(params: {
 export async function invoiceNumberFor(sequenceAt: string): Promise<string> {
   let sequence = 1;
   try {
-    const rows = (await sql`
-      select count(*)::int as n from public.verification_payments
-       where status = 'paid' and created_at <= ${sequenceAt}
-    `) as Row[];
-    sequence = Math.max(1, Number(rows[0]?.["n"] ?? 1));
+    const { paidSequence } = await import("./payments/verification-payment-store.server");
+    sequence = Math.max(1, await paidSequence(sequenceAt));
   } catch (error) {
     console.error("[invoice] nummering viel terug op 1", error);
   }
