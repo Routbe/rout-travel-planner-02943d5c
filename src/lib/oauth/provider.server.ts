@@ -34,8 +34,8 @@ export { SUPPORTED_SCOPES };
 
 /** Trusted KYC partners may request identity:national_id (set by ROUT admins only, db/0139). */
 export async function isTrustedKycPartner(clientId: string): Promise<boolean> {
-  const rows = (await sql`select is_trusted_kyc_partner from public.oauth_clients where client_id = ${clientId} limit 1`) as Row[];
-  return rows[0]?.["is_trusted_kyc_partner"] === true;
+  const row = await clientRowById(clientId);
+  return row?.["is_trusted_kyc_partner"] === true;
 }
 export type Scope = (typeof SUPPORTED_SCOPES)[number];
 
@@ -173,10 +173,29 @@ export async function listClients(ownerUserId: string, workspaceId: string | nul
   return rows.map(toClient);
 }
 
+/**
+ * Public app metadata through the database (db/0228): the consent screen and the
+ * token endpoints run for members who do not own the app, or without any member,
+ * so the owner-scoped table itself is not visible to them. Never the secret hash.
+ */
+async function clientRowById(clientId: string): Promise<Row | null> {
+  const rows = (await sql`select public.rout_oauth_client_get(${clientId}) as c`) as Row[];
+  const row = rows[0]?.["c"];
+  if (!row || typeof row !== "object") return null;
+  const r = row as Row;
+  return { ...r, secret_hash: r["has_secret"] ? "set" : null };
+}
+
+/** Peppered client-secret hash of an active app, for client authentication only. */
+async function clientSecretHash(clientId: string): Promise<string | null> {
+  const rows = (await sql`select public.rout_oauth_client_secret_hash(${clientId}) as h`) as Row[];
+  const hash = rows[0]?.["h"];
+  return typeof hash === "string" ? hash : null;
+}
+
 export async function getClientByClientId(clientId: string): Promise<OAuthClient | null> {
-  const rows = (await sql`select * from public.oauth_clients
-    where client_id = ${clientId} limit 1`) as Row[];
-  return rows[0] ? toClient(rows[0]) : null;
+  const row = await clientRowById(clientId);
+  return row ? toClient(row) : null;
 }
 
 export type ClientInput = {
@@ -384,26 +403,23 @@ const ownedClientId = manageableClientId;
 
 export async function listTestUsers(actor: ClientActor, id: string): Promise<string[]> {
   const clientId = await ownedClientId(actor, id);
-  const rows = (await sql`select identifier from public.oauth_client_test_users
-    where client_id = ${clientId} order by created_at`) as Row[];
+  const rows = (await sql`select public.rout_oauth_test_users_list(${clientId}) as identifier`) as Row[];
   return rows.map((r) => String(r["identifier"]));
 }
 
 export async function addTestUser(actor: ClientActor, id: string, identifier: string) {
   const clientId = await ownedClientId(actor, id);
-  const count = (await sql`select count(*)::int as n from public.oauth_client_test_users
-    where client_id = ${clientId}`) as Row[];
-  if (Number(count[0]?.["n"] ?? 0) >= MAX_TEST_USERS) {
+  // Count and insert happen under one lock in the database (db/0228).
+  const rows = (await sql`select public.rout_oauth_test_user_add(${clientId}, ${identifier}, ${MAX_TEST_USERS}) as r`) as Row[];
+  if (rows[0]?.["r"] === "limit") {
     throw new OAuthError("limit", `Maximaal ${MAX_TEST_USERS} testgebruikers.`);
   }
-  await sql`insert into public.oauth_client_test_users (client_id, identifier)
-    values (${clientId}, ${identifier.toLowerCase()}) on conflict do nothing`;
+  if (rows[0]?.["r"] !== "ok") throw new OAuthError("invalid", "Ongeldige testgebruiker.");
 }
 
 export async function removeTestUser(actor: ClientActor, id: string, identifier: string) {
   const clientId = await ownedClientId(actor, id);
-  await sql`delete from public.oauth_client_test_users
-    where client_id = ${clientId} and identifier = ${identifier.toLowerCase()}`;
+  await sql`select public.rout_oauth_test_user_remove(${clientId}, ${identifier})`;
 }
 
 /** First-party platform clients (no owner, e.g. `rout_native_self`) are never in test mode. */
@@ -416,28 +432,11 @@ export async function userMayUseClient(
 ): Promise<boolean> {
   if (client.publishingStatus === "production") return true;
   if (SYSTEM_CLIENT_IDS.has(client.clientId)) return true;
-  const owner = (await sql`select c.owner_user_id, c.workspace_id,
-      exists (select 1 from public.workspace_members m
-        where m.workspace_id = c.workspace_id and m.user_id = ${user.id}
-          and m.role::text = any(${[...APP_EDITOR_ROLES]})) as team_developer
-    from public.oauth_clients c
-    where c.client_id = ${client.clientId} limit 1`) as Row[];
-  // Platform login (owner null) is ROUT's own sign-in, not a developer app.
-  if (owner[0] && owner[0]["owner_user_id"] == null && owner[0]["workspace_id"] == null) return true;
-  if (String(owner[0]?.["owner_user_id"]) === user.id) return true;
-  // Teammates with developer rights may test a workspace app before it goes live.
-  if (owner[0]?.["team_developer"] === true) return true;
-  let handles: Row[] = [];
-  try {
-    handles = (await sql`select lower(username) as h from public.profiles
-      where (user_id = ${user.id} or id = ${user.id}) and username is not null`) as Row[];
-  } catch {
-    handles = [];
-  }
-  const ids = [user.email.toLowerCase(), ...handles.map((r) => String(r["h"]))];
-  const hit = (await sql`select 1 from public.oauth_client_test_users
-    where client_id = ${client.clientId} and identifier = any(${ids}) limit 1`) as Row[];
-  return hit.length > 0;
+  // One database decision for the signed-in member (db/0228): platform login,
+  // owner, workspace developer, or listed test user (account e-mail or handle).
+  void user;
+  const rows = (await sql`select public.rout_oauth_user_may_use(${client.clientId}) as ok`) as Row[];
+  return rows[0]?.["ok"] === true;
 }
 
 /* ----------------------------------------------------- verification ----- */
@@ -446,9 +445,7 @@ export type VerificationStatus = "none" | "pending" | "verified" | "rejected";
 
 export async function latestVerification(actor: ClientActor, id: string) {
   const clientId = await ownedClientId(actor, id);
-  const rows = (await sql`select status, created_at, reviewed_at
-    from public.oauth_client_verification_requests
-    where client_id = ${clientId} order by created_at desc limit 1`) as Row[];
+  const rows = (await sql`select * from public.rout_oauth_verification_latest(${clientId})`) as Row[];
   const r = rows[0];
   return {
     status: (r ? String(r["status"]) : "none") as VerificationStatus,
@@ -463,20 +460,13 @@ export async function requestVerification(actor: ClientActor, id: string, note: 
   if (!client?.supportEmail || !client.legalOwner || !client.privacyUrl) {
     throw new OAuthError("incomplete", "Vul eerst support-e-mail, juridische eigenaar en privacybeleid in.");
   }
-  const open = (await sql`select 1 from public.oauth_client_verification_requests
-    where client_id = ${clientId} and status in ('pending','verified') limit 1`) as Row[];
-  if (open.length) throw new OAuthError("exists", "Er loopt al een aanvraag of de app is al geverifieerd.");
-  await sql`insert into public.oauth_client_verification_requests (client_id, requested_by, note)
-    values (${clientId}, ${actor.userId}, ${note || null})`;
+  const rows = (await sql`select public.rout_oauth_verification_request(${clientId}, ${note || null}) as r`) as Row[];
+  if (rows[0]?.["r"] === "exists") throw new OAuthError("exists", "Er loopt al een aanvraag of de app is al geverifieerd.");
 }
 
 /** Enkel aanroepen nadat de beheerdersrol server-side is gecontroleerd. */
 export async function listPendingVerifications() {
-  const rows = (await sql`select r.id, r.client_id, r.note, r.created_at, c.name, c.homepage_url,
-      c.privacy_url, c.support_email, c.legal_owner
-    from public.oauth_client_verification_requests r
-    join public.oauth_clients c on c.client_id = r.client_id
-    where r.status = 'pending' order by r.created_at`) as Row[];
+  const rows = (await sql`select * from public.rout_oauth_verification_pending()`) as Row[];
   return rows.map((r) => ({
     id: String(r["id"]),
     clientId: String(r["client_id"]),
@@ -490,17 +480,18 @@ export async function listPendingVerifications() {
   }));
 }
 
+/** The reviewer is the caller in the database context; returns the app for the notification mail. */
 export async function reviewVerification(reviewerId: string, requestId: string, approve: boolean) {
-  await sql`update public.oauth_client_verification_requests
-    set status = ${approve ? "verified" : "rejected"}, reviewed_by = ${reviewerId}, reviewed_at = now()
-    where id = ${requestId} and status = 'pending'`;
+  void reviewerId;
+  const rows = (await sql`select * from public.rout_oauth_verification_review(${requestId}::uuid, ${approve})`) as Row[];
+  const row = rows[0];
+  return row ? { name: String(row["name"] ?? ""), ownerUserId: (row["owner_user_id"] as string | null) ?? null } : null;
 }
 
 export async function isVerifiedApp(clientId: string): Promise<boolean> {
   try {
-    const rows = (await sql`select 1 from public.oauth_client_verification_requests
-      where client_id = ${clientId} and status = 'verified' limit 1`) as Row[];
-    return rows.length > 0;
+    const rows = (await sql`select public.rout_oauth_client_verified(${clientId}) as v`) as Row[];
+    return rows[0]?.["v"] === true;
   } catch {
     return false;
   }
@@ -510,13 +501,8 @@ export async function isVerifiedApp(clientId: string): Promise<boolean> {
 
 export async function clientInsights(actor: ClientActor, id: string) {
   const clientId = await ownedClientId(actor, id);
-  const users = (await sql`select count(*)::int as n from public.oauth_consents
-    where client_id = ${clientId}`) as Row[];
-  const codes = (await sql`select
-      count(*)::int as total,
-      count(*) filter (where consumed_at is null and expires_at < now())::int as failed
-    from public.oauth_auth_codes
-    where client_id = ${clientId} and created_at > now() - interval '30 days'`) as Row[];
+  const users = (await sql`select public.rout_oauth_client_consent_count(${clientId}) as n`) as Row[];
+  const codes = (await sql`select * from public.rout_oauth_client_code_stats(${clientId})`) as Row[];
   const total = Number(codes[0]?.["total"] ?? 0);
   const failed = Number(codes[0]?.["failed"] ?? 0);
   return {
@@ -568,23 +554,19 @@ export async function issueAuthorizationCode(input: {
     code = await sealCodeDisclosure(code, input.disclosure, process.env["BETTER_AUTH_SECRET"] ?? "");
   }
   const hash = await sha256Base64Url(code);
-  const expires = new Date(Date.now() + CODE_TTL_MS).toISOString();
-  await sql`insert into public.oauth_auth_codes
-    (code_hash, client_id, user_id, redirect_uri, scopes, code_challenge, nonce, expires_at, acr, rich_identity)
-    values (${hash}, ${input.clientId}, ${input.userId}, ${input.redirectUri},
-            ${input.scopes}, ${input.codeChallenge}, ${input.nonce ?? null}, ${expires},
-            ${input.acr ?? null}, ${Boolean(input.richIdentity)})`;
+  // The database binds the code to the signed-in member and re-checks the app and
+  // its registered redirect URI (db/0228); input.userId must be that member.
+  const rows = (await sql`select public.rout_oauth_code_issue(${hash}, ${input.clientId}, ${input.redirectUri},
+      ${input.scopes}, ${input.codeChallenge}, ${input.nonce ?? null}, ${input.acr ?? null},
+      ${Boolean(input.richIdentity)}, ${Math.round(CODE_TTL_MS / 1000)}) as ok`) as Row[];
+  if (rows[0]?.["ok"] !== true) throw new OAuthError("invalid_request", "Deze app of redirect-URI is niet (meer) geldig.");
   return code;
 }
 
+/** Stored for the signed-in member (database context); userId must be that member. */
 export async function rememberConsent(userId: string, clientId: string, scopes: string[]) {
-  await sql`insert into public.oauth_consents (user_id, client_id, scopes)
-    values (${userId}, ${clientId}, ${scopes})
-    on conflict (user_id, client_id) do update set
-      scopes = case when public.oauth_consents.revoked_at is null
-        then array(select distinct x from unnest(public.oauth_consents.scopes || excluded.scopes) as x order by x)
-        else excluded.scopes end,
-      granted_at = now(), revoked_at = null`;
+  void userId;
+  await sql`select public.rout_oauth_consent_grant(${clientId}, ${scopes})`;
 }
 
 /**
@@ -597,13 +579,31 @@ export async function grantedScopesOf(userId: string, clientId: string): Promise
   return (rows[0]?.["scopes"] as string[] | null) ?? [];
 }
 
-async function consumeCode(code: string) {
+/**
+ * Single use, atomic, in the database (db/0228): the code is burnt on first
+ * presentation; app, redirect URI and PKCE (S256) are checked there.
+ */
+async function consumeCode(code: string, clientId: string, redirectUri: string, codeVerifier: string | null) {
   const hash = await sha256Base64Url(code);
-  const rows = (await sql`update public.oauth_auth_codes set consumed_at = now()
-    where code_hash = ${hash} and consumed_at is null and expires_at > now()
-    returning *`) as Row[];
-  if (!rows[0]) throw new OAuthError("invalid_grant", "Deze autorisatiecode is ongeldig of al gebruikt.");
-  return rows[0];
+  const rows = (await sql`select * from public.rout_oauth_code_consume(${hash}, ${clientId}, ${redirectUri}, ${codeVerifier})`) as Row[];
+  const row = rows[0];
+  switch (row?.["result"]) {
+    case "ok":
+      return row;
+    case "client_mismatch":
+      throw new OAuthError("invalid_grant", "Deze code hoort bij een andere app.");
+    case "redirect_mismatch":
+      console.error(
+        `[OIDC Token] redirect_uri mismatch for client ${clientId}. Authorize used: ${JSON.stringify(String(row["redirect_uri"]))} | Token request: ${JSON.stringify(redirectUri)}`,
+      );
+      throw new OAuthError("invalid_grant", "De redirect-URI komt niet overeen.");
+    case "pkce_missing":
+      throw new OAuthError("invalid_grant", "code_verifier ontbreekt.");
+    case "pkce_failed":
+      throw new OAuthError("invalid_grant", "PKCE-controle mislukt.");
+    default:
+      throw new OAuthError("invalid_grant", "Deze autorisatiecode is ongeldig of al gebruikt.");
+  }
 }
 
 /* ----------------------------------------------------------- signing keys */
@@ -638,9 +638,7 @@ export async function exchangeAuthorizationCode(input: {
   if (!ipAllowed(client, input.clientIp ?? null)) {
     throw new OAuthError("invalid_client", "Dit IP-adres mag geen tokens ophalen voor deze app.");
   }
-  const stored = (await sql`select secret_hash from public.oauth_clients
-    where client_id = ${input.clientId} limit 1`) as Row[];
-  const secretHash = (stored[0]?.["secret_hash"] as string | null) ?? null;
+  const secretHash = await clientSecretHash(input.clientId);
   let secretVerified = false;
   if (secretHash) {
     const ok = input.clientSecret
@@ -650,28 +648,26 @@ export async function exchangeAuthorizationCode(input: {
     secretVerified = true;
   }
 
-  const row = await consumeCode(input.code);
-  if (String(row["client_id"]) !== input.clientId) {
-    throw new OAuthError("invalid_grant", "Deze code hoort bij een andere app.");
-  }
+  const row = await consumeCode(input.code, input.clientId, input.redirectUri, input.codeVerifier);
   if (!redirectUrisMatch(String(row["redirect_uri"]), input.redirectUri)) {
-    console.error(
-      `[OIDC Token] redirect_uri mismatch for client ${input.clientId}. Authorize used: ${JSON.stringify(String(row["redirect_uri"]))} | Token request: ${JSON.stringify(input.redirectUri)}`,
-    );
     throw new OAuthError("invalid_grant", "De redirect-URI komt niet overeen.");
   }
-  const storedChallenge = String(row["code_challenge"] ?? "");
-  if (storedChallenge) {
-    // Code werd met PKCE uitgegeven: de verifier is altijd verplicht.
-    if (!input.codeVerifier) throw new OAuthError("invalid_grant", "code_verifier ontbreekt.");
-    if ((await sha256Base64Url(input.codeVerifier)) !== storedChallenge) {
-      throw new OAuthError("invalid_grant", "PKCE-controle mislukt.");
-    }
-  } else if (client.requirePkce || !secretVerified) {
+  if (row["has_pkce"] !== true && (client.requirePkce || !secretVerified)) {
     // Zonder PKCE enkel voor vertrouwelijke apps die PKCE expliciet uitzetten.
     throw new OAuthError("invalid_grant", "PKCE is verplicht voor deze app.");
   }
   const userId = String(row["user_id"]);
+  // Everything below acts for this member: their profile claims, subject and
+  // tokens are owner-scoped, and the token endpoint has no session of its own.
+  return withDbContext({ userId, workspaceId: null }, () => issueTokensForCode(input, client, row, userId));
+}
+
+async function issueTokensForCode(
+  input: { code: string; clientId: string },
+  client: OAuthClient,
+  row: Row,
+  userId: string,
+) {
   const scopes = (row["scopes"] as string[] | null) ?? [];
   // Agent grants are ephemeral: at most one hour, whatever the client asks for.
   const { agentTokenTtl } = await import("@/lib/agent/agent-scopes");
@@ -935,15 +931,8 @@ export async function verifyAccessToken(
     throw new OAuthError("invalid_token", "Ongeldig token.");
   }
   if (!validAccessClaims(payload, issuer(), Math.floor(Date.now()/1000))) throw new OAuthError("invalid_token", "Ongeldige access-tokenclaims.");
-  const rows = await sql`select t.user_id from public.oauth_access_tokens t
-    join public.oauth_clients c on c.client_id=t.client_id
-    join public.users u on u.id=t.user_id
-    join public.oauth_consents g on g.user_id=t.user_id and g.client_id=t.client_id
-    where t.token_hash=${await sha256Base64Url(token)} and t.revoked_at is null and t.expires_at>now()
-      and t.subject=${payload["sub"]} and t.client_id=${payload["aud"]}
-      and c.status='active' and not u.is_disabled and u.account_status='active' and g.revoked_at is null
-      and (t.family_id is null or not exists(select 1 from public.oauth_refresh_tokens r where r.family_id=t.family_id and r.revoked_at is not null))
-    limit 1`;
+  // Bearer checks run without a member context: the database decides (db/0228).
+  const rows = await sql`select public.rout_oauth_access_token_check(${await sha256Base64Url(token)}, ${String(payload["sub"])}, ${String(payload["aud"])}) as user_id`;
   const userId = rows[0]?.["user_id"];
   if (typeof userId !== "string") throw new OAuthError("invalid_token", "Token is ingetrokken.");
   return {
@@ -1160,8 +1149,7 @@ export async function subjectFor(client: OAuthClient, userId: string, redirectUr
 export async function authenticateOAuthClient(clientId: string, clientSecret: string | null, ip: string | null, confidential = false) {
   const client = await getClientByClientId(clientId);
   if (!client || client.status !== "active" || !ipAllowed(client, ip)) throw new OAuthError("invalid_client", "Ongeldige client.");
-  const rows = await sql`select secret_hash from public.oauth_clients where client_id=${clientId} limit 1`;
-  const hash = rows[0]?.["secret_hash"];
+  const hash = await clientSecretHash(clientId);
   if (confidential && typeof hash !== "string") throw new OAuthError("invalid_client", "Vertrouwelijke client vereist.");
   if (typeof hash === "string" && (!clientSecret || !(await verifyClientSecret(clientSecret, hash, await secretPepper())))) throw new OAuthError("invalid_client", "Ongeldige client.");
   return client;
