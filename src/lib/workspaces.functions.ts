@@ -308,11 +308,8 @@ export const claimCleanWorkspaceSlug = createServerFn({ method: "POST" })
 /** Early Verified bonus of the workspace owner (PRO_FOR_LIFE override), mirrored by db/0122. */
 async function ownerEarlyVerified(workspaceId: string): Promise<boolean> {
   const { sql } = await import("@/lib/neon");
-  const rows = (await sql`select 1 from public.workspace_members m
-      join public.entitlement_overrides o on o.scope_type = 'user' and o.scope_id = m.user_id
-       and o.entitlement_key = 'PRO_FOR_LIFE' and o.value = 'true'
-     where m.workspace_id = ${workspaceId} and m.role = 'owner' limit 1`) as unknown[];
-  return rows.length > 0;
+  const [r] = (await sql`select public.rout_workspace_owner_pro_for_life(${workspaceId}::uuid) as ok`) as { ok: boolean }[];
+  return r?.ok === true;
 }
 
 function workspaceDomainKey(): string {

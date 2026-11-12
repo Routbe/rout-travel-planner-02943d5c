@@ -103,7 +103,8 @@ async function resolveLabels(accounts: BaAccount[]): Promise<Map<string, string>
   if (accounts.length === 0) return out;
   try {
     const ids = accounts.map((a) => a.id);
-    const rows = (await sql`select account_id, label from public.identity_labels where account_id = any(${ids})`) as Row[];
+    // Only the caller's own accounts (or an admin) get labels back (db/0236).
+    const rows = (await sql`select account_id, label from public.rout_identity_labels_get(${ids}::text[])`) as Row[];
     for (const r of rows) out.set(String(r["account_id"]), String(r["label"]));
   } catch {
     /* tabel nog niet gemigreerd: lui resolven zonder cache */
@@ -117,8 +118,7 @@ async function resolveLabels(accounts: BaAccount[]): Promise<Map<string, string>
         if (!label && a.accessToken) label = pickIdentityLabel(a.providerId, await fetchProfile(a.providerId, a.accessToken));
         if (!label) return;
         out.set(a.id, label);
-        await sql`insert into public.identity_labels (account_id, provider, label) values (${a.id}, ${a.providerId}, ${label})
-          on conflict (account_id) do update set label = excluded.label, updated_at = now()`.catch(() => undefined);
+        await sql`select public.rout_identity_label_put(${a.id}, ${a.providerId}, ${label.slice(0, 200)})`.catch(() => undefined);
       }),
   );
   return out;

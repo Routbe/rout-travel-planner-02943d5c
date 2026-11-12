@@ -6,8 +6,8 @@ import { earlyVerifiedGrants, scopeStorageSummary, type ScopeStorageSummary, ENT
 type Row = Record<string, unknown>;
 
 async function overridesFor(scopeType: "user" | "workspace", scopeId: string): Promise<Override[]> {
-  return (await sql`select entitlement_key, value from public.entitlement_overrides
-    where scope_type = ${scopeType} and scope_id = ${scopeId}`) as Override[];
+  // Exact-scope read; the table itself is closed to the app (db/0236).
+  return (await sql`select entitlement_key, value from public.rout_entitlement_overrides(${scopeType}, ${scopeId}::uuid)`) as Override[];
 }
 
 /** Verifies the caller may act in the scope; throws Forbidden otherwise. */
@@ -42,11 +42,8 @@ export async function scopeUsedBytes(scope: Scope): Promise<number> {
 export async function grantEarlyVerifiedPromo(userId: string): Promise<void> {
   try {
     await sql`update public.profiles set is_early_verified = true where id = ${userId}`;
-    for (const g of earlyVerifiedGrants(userId)) {
-      await sql`insert into public.entitlement_overrides (scope_type, scope_id, entitlement_key, value, granted_by)
-        values (${g.scope_type}, ${g.scope_id}, ${g.entitlement_key}, ${g.value}, 'early_verified_promo')
-        on conflict (scope_type, scope_id, entitlement_key) do nothing`;
-    }
+    // The database grants exactly earlyVerifiedGrants() and only to a verified member (db/0236).
+    await sql`select public.rout_entitlement_grant_early_verified(${userId}::uuid)`;
   } catch (error) {
     console.error("[entitlements] early promo failed", error instanceof Error ? error.message : "unknown");
   }
@@ -56,13 +53,10 @@ export async function grantEarlyVerifiedPromo(userId: string): Promise<void> {
 export async function redeemPlusWorkspace(userId: string, workspaceId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if ((await getWorkspaceRole(userId, workspaceId)) !== "owner") return { ok: false, error: "Forbidden" };
   if (plusCredits(await overridesFor("user", userId)) < 1) return { ok: false, error: "no_credit" };
-  const spent = (await sql`update public.entitlement_overrides set value = (value::int - 1)::text
-    where scope_type = 'user' and scope_id = ${userId} and entitlement_key = ${ENTITLEMENT_KEYS.INCLUDED_PLUS_WORKSPACE}
-      and value ~ '^[0-9]+$' and value::int > 0 returning id`) as Row[];
-  if (!spent.length) return { ok: false, error: "no_credit" };
-  await sql`insert into public.entitlement_overrides (scope_type, scope_id, entitlement_key, value, granted_by)
-    values ('workspace', ${workspaceId}, ${ENTITLEMENT_KEYS.WORKSPACE_PLAN}, 'plus', ${`user:${userId}`})
-    on conflict (scope_type, scope_id, entitlement_key) do update set value = 'plus'`;
+  // One database call re-checks ownership, spends the credit and sets the plan atomically (db/0236).
+  const [r] = (await sql`select public.rout_entitlement_redeem_plus(${userId}::uuid, ${workspaceId}::uuid) as outcome`) as Row[];
+  if (r?.["outcome"] === "forbidden") return { ok: false, error: "Forbidden" };
+  if (r?.["outcome"] !== "ok") return { ok: false, error: "no_credit" };
   // Chronos: agents waiting on a 402 resume automatically.
   const { emitAgentWebhook } = await import("./agent/chronos.server");
   await emitAgentWebhook(workspaceId, "workspace.upgraded");

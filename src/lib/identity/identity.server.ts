@@ -26,7 +26,8 @@ export function providerConfigured(provider: IdentityProvider): boolean {
 }
 
 export async function diditSuccessCount(): Promise<number> {
-  const rows = (await sql`select success_count from public.didit_monthly_usage where month = ${monthKey()}`) as { success_count: number }[];
+  // The database fixes the UTC month itself (db/0236).
+  const rows = (await sql`select public.rout_didit_usage_count() as success_count`) as { success_count: number }[];
   return Number(rows[0]?.success_count ?? 0);
 }
 
@@ -90,11 +91,8 @@ export async function completeVerification(input: {
   if (decision === "reject") return { ok: false, reason: "already_verified" };
 
   if (input.provider === "didit") {
-    const bumped = (await sql`insert into public.didit_monthly_usage (month, success_count) values (${monthKey()}, 1)
-      on conflict (month) do update set success_count = didit_monthly_usage.success_count + 1
-      where didit_monthly_usage.success_count < ${DIDIT_MONTHLY_LIMIT}
-      returning success_count`) as unknown[];
-    if (bumped.length === 0) return { ok: false, reason: "limit_reached" };
+    const [bumped] = (await sql`select public.rout_didit_usage_bump(${DIDIT_MONTHLY_LIMIT}::int) as ok`) as { ok: boolean }[];
+    if (bumped?.ok !== true) return { ok: false, reason: "limit_reached" };
   }
 
   if (decision === "upgrade") {
@@ -104,7 +102,7 @@ export async function completeVerification(input: {
           national_id_nullifier = ${humanId}, legal_name = ${name}, verified_at = now()
         where user_id = ${input.userId}`;
     } catch (error) {
-      await sql`update public.didit_monthly_usage set success_count = greatest(success_count - 1, 0) where month = ${monthKey()}`;
+      await sql`select public.rout_didit_usage_release()`;
       if (/duplicate|unique/i.test(String((error as Error)?.message))) return { ok: false, reason: "duplicate_human" };
       throw error;
     }
@@ -129,7 +127,7 @@ export async function completeVerification(input: {
       on conflict (user_id) do nothing`;
   } catch (error) {
     if (input.provider === "didit") {
-      await sql`update public.didit_monthly_usage set success_count = greatest(success_count - 1, 0) where month = ${monthKey()}`;
+      await sql`select public.rout_didit_usage_release()`;
     }
     if (/duplicate|unique/i.test(String((error as Error)?.message))) return { ok: false, reason: "duplicate_human" };
     throw error;
