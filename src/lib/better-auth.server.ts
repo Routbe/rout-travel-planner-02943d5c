@@ -466,7 +466,7 @@ export async function liveAuthChecks() {
     ? {
         authVerification: await step("select 1 from neon_auth.verification limit 1"),
         authSession: await step('select 1 from neon_auth.session limit 1'),
-        securityCheckStore: await step("select 1 from public.altcha_used limit 1"),
+        securityCheckStore: await step("select public.rout_altcha_store_ready()"),
         members: await step("select 1 from public.users limit 1"),
       }
     : null;

@@ -17,9 +17,8 @@ export async function issueLoginCode(email: string, link: string): Promise<strin
   try {
     const code = newLoginCode();
     const e = await sha256Hex(norm(email));
-    await sql`delete from public.login_codes where email_hash = ${e} or expires_at < now()`;
-    await sql`insert into public.login_codes (email_hash, code_hash, link, expires_at)
-      values (${e}, ${await sha256Hex(`${e}:${code}`)}, ${link}, now() + make_interval(secs => ${LOGIN_CODE_TTL_SEC}))`;
+    // 0232: replaces any earlier code for this address in one database step.
+    await sql`select public.rout_stateless_otp_issue('login_code', ${e}, ${await sha256Hex(`${e}:${code}`)}, ${link}, ${LOGIN_CODE_TTL_SEC})`;
     // Sign-in codes never reach the logs, not even in preview.
     return code;
   } catch (err) {
@@ -38,9 +37,11 @@ export async function redeemLoginCode(
   const limit = await hitRateLimit("login-code", norm(email), { limit: 5, windowSec: 600 });
   if (!limit.ok) return { ok: false, reason: "rate_limited" };
   const e = await sha256Hex(norm(email));
-  const rows = (await sql`delete from public.login_codes
-    where email_hash = ${e} and code_hash = ${await sha256Hex(`${e}:${clean}`)} and expires_at > now()
-    returning link`) as { link: string }[];
-  const link = rows[0]?.link;
+  // 0232: single use, and five wrong codes burn the code in the database itself.
+  const rows = (await sql`select * from public.rout_stateless_otp_verify('login_code', ${e}, ${clean})`) as {
+    outcome: string;
+    payload: string | null;
+  }[];
+  const link = rows[0]?.outcome === "ok" ? rows[0].payload : null;
   return link ? { ok: true, link } : { ok: false, reason: "invalid" };
 }

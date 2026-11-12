@@ -114,22 +114,21 @@ export async function verifyAltcha(
   if (!safeEqualHex(sha256(salt + number), challenge)) return { ok: false, reason: "bad_solution" };
 
   try {
-    // db/54 owns the table: the least-privilege login role must never run DDL.
-    const insert = () => sql`
-      insert into public.altcha_used (signature, expires_at)
-      values (${signature}, to_timestamp(${expires}))
-      on conflict (signature) do nothing
-      returning signature
-    `;
-    let rows: unknown[];
+    // 0232: the database burns the signature exactly once (and checks expiry on
+    // its own clock); the app role has no direct access to the replay store.
+    const burn = async () =>
+      String(((await sql`select public.rout_altcha_verify_and_burn(${signature}, to_timestamp(${expires})) as r`) as { r: string }[])[0]?.r);
+    let outcome: string;
     try {
-      rows = (await insert()) as unknown as unknown[];
+      outcome = await burn();
     } catch {
       // One immediate retry: a transient gateway/network blip must never turn
       // a valid, freshly solved proof into a failed sign-in.
-      rows = (await insert()) as unknown as unknown[];
+      outcome = await burn();
     }
-    if (rows.length === 0) return { ok: false, reason: "replayed" };
+    if (outcome === "replayed") return { ok: false, reason: "replayed" };
+    if (outcome === "expired") return { ok: false, reason: "expired" };
+    if (outcome !== "ok") return { ok: false, reason: "malformed" };
   } catch (err) {
     console.error("[ALTCHA Error]: replay store unavailable:", err instanceof Error ? err.message : err);
     return { ok: false, reason: "store_unavailable" };
@@ -151,11 +150,7 @@ export function throttleHashForEmail(email: string): string {
 export async function identityNeedsHardChallenge(identityHash: string | null | undefined): Promise<boolean> {
   if (!identityHash) return false;
   try {
-    const rows = (await sql`
-      select failures from public.signin_throttle
-       where identity_hash = ${identityHash}
-         and window_started_at > now() - interval '15 minutes'
-    `) as Array<{ failures?: number }>;
+    const rows = (await sql`select public.rout_signin_throttle_failures(${identityHash}) as failures`) as Array<{ failures?: number }>;
     return Number(rows[0]?.failures ?? 0) >= HARD_AFTER_FAILURES;
   } catch {
     return false;
@@ -164,6 +159,6 @@ export async function identityNeedsHardChallenge(identityHash: string | null | u
 
 /** Deletes expired replay rows (cron). */
 export async function purgeExpiredAltcha(): Promise<{ deleted: number }> {
-  const rows = (await sql`delete from public.altcha_used where expires_at < now() returning 1`) as unknown[];
-  return { deleted: rows.length };
+  const rows = (await sql`select public.rout_altcha_purge() as n`) as { n: number }[];
+  return { deleted: Number(rows[0]?.n ?? 0) };
 }

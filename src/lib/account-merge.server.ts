@@ -54,11 +54,9 @@ export async function createMergeTicket(primaryUserId: string) {
 /** Failed redeem attempts in the window; null when unknown (callers fail closed). */
 async function countMergeFailures(userId: string): Promise<number | null> {
   try {
-    const { sha256Hex } = await import("./rate-limit-db.server");
-    const bucket = `merge-redeem-fail:${await sha256Hex(userId)}`;
-    const rows = (await sql`select coalesce(sum(hits), 0)::int as hits from public.rate_limits
-       where bucket = ${bucket} and window_start > now() - make_interval(mins => ${TICKET_TTL_MINUTES * 2})`) as Row[];
-    return Number(rows[0]?.["hits"] ?? 0);
+    // Same bucket that hitRateLimit("merge-redeem-fail", …) writes (0232).
+    const { peekRateLimit } = await import("./rate-limit-db.server");
+    return await peekRateLimit("merge-redeem-fail", userId, TICKET_TTL_MINUTES * 2 * 60);
   } catch (error) {
     console.error("[merge] failure counter unavailable", (error as Error)?.message);
     return null;

@@ -1,5 +1,5 @@
 import { sql } from "@/lib/neon";
-import { decideSlidingLimit, windowStartMs, type RateRule } from "@/lib/rate-limit-rules";
+import { decideSlidingLimit, type RateRule } from "@/lib/rate-limit-rules";
 
 /**
  * Database-backed limits (db/64) so every server instance shares one counter.
@@ -12,30 +12,39 @@ export async function sha256Hex(value: string): Promise<string> {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * Keyed, purpose-separated and rotated daily: an IP cannot be recovered from a
+ * bucket, and buckets of different limits cannot be linked to each other.
+ */
+async function bucketFor(name: string, subject: string, nowMs: number): Promise<string> {
+  const { rateLimitKey } = await import("@/lib/qa/privacy-keys.server");
+  return `${name}:${await rateLimitKey(name, subject, nowMs)}`;
+}
+
 export async function hitRateLimit(name: string, subject: string, rule: RateRule, options: { failClosed?: boolean } = {}) {
-  const now = Date.now();
   try {
-    // Keyed, purpose-separated and rotated daily: an IP cannot be recovered from
-    // a bucket, and buckets of different limits cannot be linked to each other.
-    const { rateLimitKey } = await import("@/lib/qa/privacy-keys.server");
-    const bucket = `${name}:${await rateLimitKey(name, subject, now)}`;
-    const startMs = windowStartMs(now, rule.windowSec);
-    const start = new Date(startMs).toISOString();
-    const prevStart = new Date(startMs - rule.windowSec * 1000).toISOString();
-    const rows = (await sql`with up as (insert into public.rate_limits (bucket, window_start, hits)
-      values (${bucket}, ${start}, 1)
-      on conflict (bucket, window_start) do update set hits = public.rate_limits.hits + 1
-      returning hits)
-      select (select hits from up) as hits,
-             coalesce((select hits from public.rate_limits where bucket = ${bucket} and window_start = ${prevStart}), 0) as prev`) as { hits: number; prev: number }[];
-    if (Math.random() < 0.01) {
-      void sql`delete from public.rate_limits where window_start < now() - interval '1 day'`.catch(() => {});
-    }
-    return decideSlidingLimit(Number(rows[0]?.prev ?? 0), Number(rows[0]?.hits ?? 1), rule, now);
+    const bucket = await bucketFor(name, subject, Date.now());
+    // 0232: one atomic database step on the database clock; it also clears the
+    // bucket's older windows and now and then sweeps stale ones.
+    const rows = (await sql`select * from public.rout_rate_limit_check_and_increment(${bucket}, ${rule.windowSec})`) as {
+      hits: number;
+      prev: number;
+      now_ms: number | string;
+    }[];
+    const row = rows[0];
+    const dbNow = Number(row?.now_ms);
+    return decideSlidingLimit(Number(row?.prev ?? 0), Number(row?.hits ?? 1), rule, Number.isFinite(dbNow) ? dbNow : Date.now());
   } catch (error) {
     console.warn(`[rate-limit] ${name} skipped:`, (error as Error)?.message);
     return options.failClosed ? { ok: false, retryAfter: rule.windowSec } : { ok: true, retryAfter: 0 };
   }
+}
+
+/** Hits of one limit in the last `sinceSec` seconds, without counting a new one. */
+export async function peekRateLimit(name: string, subject: string, sinceSec: number): Promise<number> {
+  const bucket = await bucketFor(name, subject, Date.now());
+  const rows = (await sql`select public.rout_rate_limit_peek(${bucket}, ${sinceSec}) as hits`) as { hits: number }[];
+  return Number(rows[0]?.hits ?? 0);
 }
 
 export function clientIp(request: Request): string {
