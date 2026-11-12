@@ -8,3 +8,4 @@ EXPAND functions. Move a file into `db/` only when production runs that code.
 - `0231_payments_lockdown.sql` — after `db/0229_payments_and_promos_rpc.sql` code is live on Vercel.
 - `0233_abuse_lockdown.sql` — after `db/0232_abuse_and_stateless_auth_rpc.sql` code is live on Vercel.
 - `0235_security_logs_lockdown.sql` — after `db/0234_security_logs_webhooks_rpc.sql` code is live on Vercel.
+- `0237_identity_entitlements_lockdown.sql` — after `db/0236_identity_entitlements_rpc.sql` code is live on Vercel.
