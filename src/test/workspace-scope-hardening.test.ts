@@ -64,10 +64,15 @@ describe("database hardening migrations (snapshot)", () => {
     }
   });
   it("secret tables stay deny-by-default for runtime; only the non-login merge executor has a policy", () => {
-    for (const n of ["api_keys", "auth_tokens", "psp_credentials", "user_sessions"]) {
+    for (const n of ["api_keys", "auth_tokens", "user_sessions"]) {
       expect(pub(n).rls).toBe(true);
       expect(pub(n).policies.map((p) => p.roles)).toEqual([["rout_merge_executor"]]);
     }
+  });
+  it("PSP keys: besides the merge executor only the owner's own read and a due purge (db/0229)", () => {
+    const t = pub("psp_credentials");
+    expect(t.rls).toBe(true);
+    expect(t.policies.map((p) => p.name).sort()).toEqual(["atomic_merge_executor", "psp_owner_read", "psp_purge", "psp_purge_read"].sort());
   });
   it("users link to the Better Auth identity with ON DELETE CASCADE", () => {
     expect(pub("users").columns.map((c) => c.name)).toContain("auth_user_id");
