@@ -18108,6 +18108,36 @@
           "cmd": "SELECT",
           "using": "true",
           "check": null
+        },
+        {
+          "name": "psp_owner_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "(user_id = rout_current_user_id())",
+          "check": null
+        },
+        {
+          "name": "psp_purge",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "rout_purge_due(user_id)",
+          "check": null
+        },
+        {
+          "name": "psp_purge_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_purge_due(user_id)",
+          "check": null
         }
       ],
       "grants": {
@@ -25014,6 +25044,36 @@
           "cmd": "SELECT",
           "using": "true",
           "check": null
+        },
+        {
+          "name": "vp_admin_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_caller_is_admin()",
+          "check": null
+        },
+        {
+          "name": "vp_admin_update",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "UPDATE",
+          "using": "rout_caller_is_admin()",
+          "check": "rout_caller_is_admin()"
+        },
+        {
+          "name": "vp_owner_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "(user_id = rout_current_user_id())",
+          "check": null
         }
       ],
       "grants": {
@@ -28454,7 +28514,7 @@
       "schema": "public",
       "name": "rout_caller_is_admin",
       "args": "",
-      "def": "CREATE OR REPLACE FUNCTION public.rout_caller_is_admin()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (select 1 from public.user_roles r\n                  where r.user_id = public.rout_current_user_id() and r.role::text = 'admin')\n$function$"
+      "def": "CREATE OR REPLACE FUNCTION public.rout_caller_is_admin()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select public.rout_has_role(public.rout_current_user_id(), 'admin')\n$function$"
     },
     {
       "schema": "public",
@@ -28533,6 +28593,54 @@
       "name": "rout_ephemeral_vault_read",
       "args": "p_vault_id uuid",
       "def": "CREATE OR REPLACE FUNCTION public.rout_ephemeral_vault_read(p_vault_id uuid)\n RETURNS TABLE(vault_hash text, encrypted_payload text, expires_at timestamp with time zone)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select v.vault_hash, v.encrypted_payload, v.expires_at\n    from public.ephemeral_vaults v\n   where public.rout_current_user_id() is not null\n     and v.vault_id = p_vault_id and v.expires_at > now()\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_gift_card_activate",
+      "args": "p_gift uuid, p_reference text, p_max_redemptions integer, p_expires_at timestamp with time zone, p_paid_cents integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_gift_card_activate(p_gift uuid, p_reference text, p_max_redemptions integer, p_expires_at timestamp with time zone, p_paid_cents integer)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare g public.gift_cards;\nbegin\n  select * into g from public.gift_cards where id = p_gift for update;\n  if not found then return pg_catalog.jsonb_build_object('outcome', 'not_found'); end if;\n  if p_paid_cents is not null and p_paid_cents <> g.amount_cents then\n    return pg_catalog.jsonb_build_object('outcome', 'amount_mismatch');\n  end if;\n  if coalesce(p_max_redemptions, 1) not between 1 and 10000 then\n    raise exception 'invalid redemption cap' using errcode = '22023';\n  end if;\n  if not (g.status = 'pending'\n          or (g.status = 'paid' and not exists (select 1 from public.promo_codes c where c.code = g.code))) then\n    return pg_catalog.jsonb_build_object('outcome', 'duplicate');\n  end if;\n  update public.gift_cards\n     set status = 'paid', paid_at = pg_catalog.now(),\n         fulfilment_status = case when physical_delivery then 'pending_print' else fulfilment_status end,\n         stripe_reference = coalesce(p_reference, stripe_reference), updated_at = pg_catalog.now()\n   where id = p_gift\n  returning * into g;\n  insert into public.promo_codes (code, label, percent_off, amount_off_cents, max_redemptions, expires_at, active)\n  values (g.code, 'Cadeaubon', 0, g.amount_cents, coalesce(p_max_redemptions, 1), p_expires_at, true)\n  on conflict (code) do nothing;\n  return pg_catalog.jsonb_build_object('outcome', 'activated', 'card', pg_catalog.to_jsonb(g));\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_gift_card_create",
+      "args": "p_code text, p_amount integer, p_purchaser_user_id uuid, p_purchaser_email text, p_purchaser_name text, p_recipient_email text, p_recipient_name text, p_message text, p_design text, p_physical boolean, p_ship_name text, p_ship_line1 text, p_ship_postal_code text, p_ship_city text, p_ship_country text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_gift_card_create(p_code text, p_amount integer, p_purchaser_user_id uuid, p_purchaser_email text, p_purchaser_name text, p_recipient_email text, p_recipient_name text, p_message text, p_design text, p_physical boolean, p_ship_name text, p_ship_line1 text, p_ship_postal_code text, p_ship_city text, p_ship_country text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_id uuid;\nbegin\n  if p_purchaser_user_id is not null and p_purchaser_user_id is distinct from public.rout_current_user_id() then\n    raise exception 'purchaser must be the caller' using errcode = '42501';\n  end if;\n  if p_amount not between 500 and 50000 or pg_catalog.length(coalesce(p_purchaser_email, '')) not between 3 and 320 then\n    raise exception 'invalid gift order' using errcode = '22023';\n  end if;\n  insert into public.gift_cards (code, amount_cents, purchaser_user_id, purchaser_email, purchaser_name,\n      recipient_email, recipient_name, message, design, physical_delivery,\n      ship_name, ship_line1, ship_postal_code, ship_city, ship_country)\n  values (p_code, p_amount, p_purchaser_user_id, p_purchaser_email, p_purchaser_name,\n      p_recipient_email, p_recipient_name, pg_catalog.left(p_message, 1000), coalesce(p_design, 'classic'), coalesce(p_physical, false),\n      p_ship_name, p_ship_line1, p_ship_postal_code, p_ship_city, p_ship_country)\n  on conflict (code) do nothing\n  returning id into v_id;\n  return v_id;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_gift_card_mark_delivered",
+      "args": "p_gift uuid, p_invoice text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_gift_card_mark_delivered(p_gift uuid, p_invoice text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  update public.gift_cards set status = 'delivered', delivered_at = pg_catalog.now(), invoice_number = p_invoice,\n         updated_at = pg_catalog.now()\n   where id = p_gift and status = 'paid';\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_gift_card_mine",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_gift_card_mine()\n RETURNS SETOF jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_require_member();\nbegin\n  return query select pg_catalog.jsonb_build_object('code', g.code, 'amount_cents', g.amount_cents, 'currency', g.currency,\n           'design', g.design, 'recipient_name', g.recipient_name, 'purchaser_name', g.purchaser_name,\n           'message', g.message, 'status', g.status, 'fulfilment_status', g.fulfilment_status,\n           'tracking_code', g.tracking_code, 'created_at', g.created_at,\n           'redeemed', coalesce((select c.redeemed_count > 0 from public.promo_codes c where c.code = g.code), false))\n    from public.gift_cards g where g.purchaser_user_id = v order by g.created_at desc limit 50;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_gift_card_public",
+      "args": "p_code text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_gift_card_public(p_code text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select pg_catalog.jsonb_build_object('code', g.code, 'amount_cents', g.amount_cents, 'currency', g.currency,\n           'design', g.design, 'recipient_name', g.recipient_name, 'purchaser_name', g.purchaser_name,\n           'message', g.message, 'status', g.status, 'fulfilment_status', g.fulfilment_status,\n           'tracking_code', g.tracking_code, 'created_at', g.created_at,\n           'redeemed', coalesce((select c.redeemed_count > 0 from public.promo_codes c where c.code = g.code), false))\n    from public.gift_cards g where g.code = p_code and g.status in ('paid', 'delivered') limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_gift_card_recipient",
+      "args": "p_code text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_gift_card_recipient(p_code text)\n RETURNS TABLE(recipient_email text, recipient_name text, message text)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  perform public.rout_require_admin();\n  return query select g.recipient_email, g.recipient_name, g.message from public.gift_cards g where g.code = p_code limit 1;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_gift_shipment_update",
+      "args": "p_gift uuid, p_status text, p_tracking text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_gift_shipment_update(p_gift uuid, p_status text, p_tracking text)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_code text;\nbegin\n  perform public.rout_require_admin();\n  update public.gift_cards\n     set fulfilment_status = p_status, tracking_code = coalesce(p_tracking, tracking_code),\n         packaged_at = case when p_status = 'packaged' then pg_catalog.now() else packaged_at end,\n         shipped_at = case when p_status = 'shipped' then pg_catalog.now() else shipped_at end,\n         updated_at = pg_catalog.now()\n   where id = p_gift and physical_delivery\n  returning code into v_code;\n  return v_code;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_gift_shipments",
+      "args": "p_open_only boolean",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_gift_shipments(p_open_only boolean)\n RETURNS SETOF jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  perform public.rout_require_admin();\n  return query select pg_catalog.jsonb_build_object('id', g.id, 'code', g.code, 'amount_cents', g.amount_cents,\n      'design', g.design, 'status', g.status, 'fulfilment_status', g.fulfilment_status, 'tracking_code', g.tracking_code,\n      'purchaser_email', g.purchaser_email, 'recipient_name', g.recipient_name, 'ship_name', g.ship_name,\n      'ship_line1', g.ship_line1, 'ship_postal_code', g.ship_postal_code, 'ship_city', g.ship_city,\n      'ship_country', g.ship_country, 'created_at', g.created_at, 'shipped_at', g.shipped_at)\n    from public.gift_cards g\n   where g.physical_delivery and g.status in ('paid', 'delivered')\n     and (not p_open_only or g.fulfilment_status <> 'shipped')\n   order by g.created_at asc limit 200;\nend $function$"
     },
     {
       "schema": "public",
@@ -28920,9 +29028,57 @@
     },
     {
       "schema": "public",
+      "name": "rout_pricing_get",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_pricing_get()\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select pg_catalog.jsonb_build_object(\n           'verification_base_cents', s.verification_base_cents, 'fee_card_cents', s.fee_card_cents,\n           'fee_bunq_cents', s.fee_bunq_cents, 'fee_sepa_cents', s.fee_sepa_cents,\n           'min_donation_cents', s.min_donation_cents)\n    from public.pricing_settings s where s.id = 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_pricing_set",
+      "args": "p_base integer, p_card integer, p_bunq integer, p_sepa integer, p_min_donation integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_pricing_set(p_base integer, p_card integer, p_bunq integer, p_sepa integer, p_min_donation integer)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_admin uuid := public.rout_require_admin();\nbegin\n  if least(p_base, p_card, p_bunq, p_sepa, p_min_donation) < 0\n     or greatest(p_base, p_card, p_bunq, p_sepa, p_min_donation) > 100000 then\n    raise exception 'pricing out of range' using errcode = '22023';\n  end if;\n  insert into public.pricing_settings\n    (id, verification_base_cents, fee_card_cents, fee_bunq_cents, fee_sepa_cents, min_donation_cents, updated_at, updated_by)\n  values (1, p_base, p_card, p_bunq, p_sepa, p_min_donation, pg_catalog.now(), v_admin)\n  on conflict (id) do update set\n    verification_base_cents = excluded.verification_base_cents, fee_card_cents = excluded.fee_card_cents,\n    fee_bunq_cents = excluded.fee_bunq_cents, fee_sepa_cents = excluded.fee_sepa_cents,\n    min_donation_cents = excluded.min_donation_cents, updated_at = pg_catalog.now(), updated_by = v_admin;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_profile_qa_level",
       "args": "p_handle text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_profile_qa_level(p_handle text)\n RETURNS qa_permission_level\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select case when u.qa_permission_level <> 'public_unrestricted' then u.qa_permission_level\n              when u.date_of_birth > (current_date - interval '16 years') then 'verified_only'::public.qa_permission_level\n              else u.qa_permission_level end\n    from public.profiles p join public.users u on u.id = p.id\n   where lower(p.username) = lower(p_handle)\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_promo_admin_list",
+      "args": "p_limit integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_promo_admin_list(p_limit integer)\n RETURNS SETOF jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  perform public.rout_require_admin();\n  return query select pg_catalog.jsonb_build_object('code', c.code, 'label', c.label, 'percent_off', c.percent_off,\n      'amount_off_cents', c.amount_off_cents, 'max_redemptions', c.max_redemptions, 'redeemed_count', c.redeemed_count,\n      'active', c.active, 'expires_at', c.expires_at, 'created_at', c.created_at)\n    from public.promo_codes c order by c.created_at desc limit least(greatest(coalesce(p_limit, 50), 1), 500);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_promo_admin_save",
+      "args": "p_code text, p_label text, p_percent integer, p_amount integer, p_max_discount integer, p_max_redemptions integer, p_expires_at timestamp with time zone, p_overwrite boolean",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_promo_admin_save(p_code text, p_label text, p_percent integer, p_amount integer, p_max_discount integer, p_max_redemptions integer, p_expires_at timestamp with time zone, p_overwrite boolean)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  perform public.rout_require_admin();\n  if p_code !~ '^[^[:space:]]{1,64}$' or coalesce(p_percent, 0) not between 0 and 100 or coalesce(p_amount, 0) < 0\n     or (p_max_redemptions is not null and p_max_redemptions not between 1 and 100000) then\n    raise exception 'invalid promo code' using errcode = '22023';\n  end if;\n  if p_overwrite then\n    insert into public.promo_codes (code, label, percent_off, amount_off_cents, max_discount_cents, max_redemptions, expires_at, active)\n    values (p_code, p_label, coalesce(p_percent, 0), coalesce(p_amount, 0), p_max_discount, p_max_redemptions, p_expires_at, true)\n    on conflict (code) do update set label = excluded.label, percent_off = excluded.percent_off,\n      amount_off_cents = excluded.amount_off_cents, max_discount_cents = excluded.max_discount_cents,\n      max_redemptions = excluded.max_redemptions, expires_at = excluded.expires_at, active = true, updated_at = pg_catalog.now();\n    return true;\n  end if;\n  insert into public.promo_codes (code, label, percent_off, amount_off_cents, max_discount_cents, max_redemptions, expires_at, active)\n  values (p_code, p_label, coalesce(p_percent, 0), coalesce(p_amount, 0), p_max_discount, p_max_redemptions, p_expires_at, true)\n  on conflict (code) do nothing;\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_promo_admin_terms",
+      "args": "p_code text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_promo_admin_terms(p_code text)\n RETURNS TABLE(max_redemptions integer, expires_at timestamp with time zone)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  perform public.rout_require_admin();\n  return query select c.max_redemptions, c.expires_at from public.promo_codes c where c.code = p_code limit 1;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_promo_event",
+      "args": "p_code text, p_event text, p_detail text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_promo_event(p_code text, p_event text, p_detail text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_caller_is_admin() or p_event not in ('created', 'sent_email', 'sent_sms') then return false; end if;\n  insert into public.promo_code_events (code, event, detail) values (p_code, p_event, pg_catalog.left(p_detail, 500));\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_promo_lookup",
+      "args": "p_code text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_promo_lookup(p_code text)\n RETURNS TABLE(percent_off integer, amount_off_cents integer, label text, max_discount_cents integer)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select c.percent_off, c.amount_off_cents, c.label, c.max_discount_cents\n    from public.promo_codes c\n   where c.code = p_code and c.active\n     and (c.expires_at is null or c.expires_at > pg_catalog.now())\n     and (c.max_redemptions is null or c.redeemed_count < c.max_redemptions)\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_promo_redeem",
+      "args": "p_code text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_promo_redeem(p_code text)\n RETURNS TABLE(redeemed_count integer, max_redemptions integer)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_count int; v_max int;\nbegin\n  update public.promo_codes c\n     set redeemed_count = c.redeemed_count + 1,\n         last_redeemed_at = pg_catalog.now(),\n         active = case when c.max_redemptions is not null and c.redeemed_count + 1 >= c.max_redemptions\n                       then false else c.active end,\n         updated_at = pg_catalog.now()\n   where c.code = p_code and c.active\n     and (c.expires_at is null or c.expires_at > pg_catalog.now())\n     and (c.max_redemptions is null or c.redeemed_count < c.max_redemptions)\n  returning c.redeemed_count, c.max_redemptions into v_count, v_max;\n  if v_count is null then\n    insert into public.promo_code_events (code, event, detail) values (p_code, 'exhausted', 'claim geweigerd: niet meer geldig');\n    return;\n  end if;\n  insert into public.promo_code_events (code, event, detail) values (p_code, 'redeemed', 'gebruik #' || v_count);\n  if v_max is not null and v_count >= v_max then\n    insert into public.promo_code_events (code, event, detail) values (p_code, 'exhausted', 'maximum bereikt');\n  end if;\n  redeemed_count := v_count; max_redemptions := v_max;\n  return next;\nend $function$"
     },
     {
       "schema": "public",
@@ -28959,6 +29115,36 @@
       "name": "rout_protocol_revoked",
       "args": "p_stream text, p_ids text[]",
       "def": "CREATE OR REPLACE FUNCTION public.rout_protocol_revoked(p_stream text, p_ids text[])\n RETURNS SETOF text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  select distinct e.event -> 'body' -> 'public' ->> 'capId'\n  from public.protocol_events e\n  join public.protocol_events g on g.stream_id = e.stream_id and g.seq = 0\n  where e.stream_id = p_stream and e.kind = 'cap.revoke' and e.author_did = g.author_did\n    and (e.event -> 'body' -> 'public' ->> 'capId') = any (p_ids)\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_psp_delete",
+      "args": "p_provider text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_psp_delete(p_provider text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_require_member();\nbegin\n  delete from public.psp_credentials where user_id = v and provider = p_provider;\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_psp_public_owner",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_psp_public_owner(p_user uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (\n    select 1 from public.profiles p join public.tip_settings t on t.user_id = p.id\n     where p.id = p_user and p.verified is true and p.username is not null\n       and not coalesce(p.is_banned, false) and not coalesce(p.is_suspended, false)\n       and coalesce(p.status, 'active') = 'active'\n       and coalesce((pg_catalog.to_jsonb(p) ->> 'is_business')::boolean, false)\n       and t.enabled)\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_psp_public_providers",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_psp_public_providers(p_user uuid)\n RETURNS SETOF text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select c.provider from public.psp_credentials c\n   where c.user_id = p_user and public.rout_psp_public_owner(p_user) order by c.provider\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_psp_save",
+      "args": "p_provider text, p_ciphertext text, p_iv text, p_last4 text, p_mode text, p_publishable_key text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_psp_save(p_provider text, p_ciphertext text, p_iv text, p_last4 text, p_mode text, p_publishable_key text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_require_member();\nbegin\n  insert into public.psp_credentials (user_id, provider, ciphertext, iv, last4, mode, publishable_key, verified_at)\n  values (v, p_provider, p_ciphertext, p_iv, pg_catalog.right(p_last4, 4), p_mode, p_publishable_key, pg_catalog.now())\n  on conflict (user_id, provider) do update set ciphertext = excluded.ciphertext, iv = excluded.iv,\n    last4 = excluded.last4, mode = excluded.mode, publishable_key = excluded.publishable_key, verified_at = pg_catalog.now();\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_psp_tip_credential",
+      "args": "p_user uuid, p_provider text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_psp_tip_credential(p_user uuid, p_provider text)\n RETURNS TABLE(ciphertext text, iv text, publishable_key text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select c.ciphertext, c.iv, c.publishable_key from public.psp_credentials c\n   where c.user_id = p_user and c.provider = p_provider and public.rout_psp_public_owner(p_user) limit 1\n$function$"
     },
     {
       "schema": "public",
@@ -29112,6 +29298,18 @@
     },
     {
       "schema": "public",
+      "name": "rout_require_admin",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_require_admin()\n RETURNS uuid\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_current_user_id();\nbegin\n  if v is null or not public.rout_has_role(v, 'admin') then\n    raise exception 'admin required' using errcode = '42501';\n  end if;\n  return v;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_require_member",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_require_member()\n RETURNS uuid\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_current_user_id();\nbegin\n  if v is null then raise exception 'member context required' using errcode = '42501'; end if;\n  return v;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_resolve_account",
       "args": "p_identifier text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_resolve_account(p_identifier text)\n RETURNS TABLE(user_id uuid, email text, username text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select u.id, u.email, p.username from public.users u left join public.profiles p on p.id = u.id\n  where public.rout_current_user_id() is not null and u.account_status = 'active'\n    and (lower(p.username) = lower(ltrim(p_identifier, '@')) or u.email_normalized = lower(p_identifier))\n  limit 1 $function$"
@@ -29211,6 +29409,90 @@
       "name": "rout_visit_seen_recently",
       "args": "p_hash text, p_handle text, p_space text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_visit_seen_recently(p_hash text, p_handle text, p_space text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  select exists (\n    select 1 from public.profile_visits\n     where visitor_hash = p_hash and handle = p_handle and space = p_space\n       and created_at > now() - interval '30 minutes'\n  );\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_attach_ref",
+      "args": "p_id uuid, p_provider_ref text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_attach_ref(p_id uuid, p_provider_ref text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_require_member();\nbegin\n  update public.verification_payments set provider_ref = p_provider_ref, updated_at = pg_catalog.now()\n   where id = p_id and user_id = v and status in ('pending', 'incomplete')\n     and (p_provider_ref ~ '^pi_[A-Za-z0-9_]+$' or p_provider_ref ~ '^bunqme:[0-9]+:[0-9]+$');\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_claim_paid",
+      "args": "p_id uuid, p_provider_ref text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_claim_paid(p_id uuid, p_provider_ref text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  update public.verification_payments set status = 'paid', provider_ref = p_provider_ref, updated_at = pg_catalog.now()\n   where id = p_id and status not in ('paid', 'refunded');\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_end_donation",
+      "args": "p_id uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_end_donation(p_id uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  update public.verification_payments set donation_plan = 'none', donation_cents = 0, updated_at = pg_catalog.now()\n   where id = p_id;\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_expire_own_open_stripe",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_expire_own_open_stripe()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_require_member(); n int;\nbegin\n  update public.verification_payments set status = 'expired', updated_at = pg_catalog.now()\n   where user_id = v and provider = 'stripe' and status in ('pending', 'incomplete');\n  get diagnostics n = row_count;\n  return n;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_fail_own",
+      "args": "p_id uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_fail_own(p_id uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_require_member();\nbegin\n  update public.verification_payments set status = 'failed', updated_at = pg_catalog.now()\n   where id = p_id and user_id = v and status = 'pending';\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_find",
+      "args": "p_reference text, p_provider_ref text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_find(p_reference text, p_provider_ref text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select public.rout_vp_json(v) from public.verification_payments v\n   where (p_reference is not null and v.reference_code = p_reference)\n      or (p_provider_ref is not null and v.provider_ref = p_provider_ref)\n   order by v.created_at desc limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_get",
+      "args": "p_id uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_get(p_id uuid)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select public.rout_vp_json(v) from public.verification_payments v where v.id = p_id\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_json",
+      "args": "v verification_payments",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_json(v verification_payments)\n RETURNS jsonb\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n  select pg_catalog.jsonb_build_object('id', v.id, 'user_id', v.user_id, 'tier', v.tier, 'amount_cents', v.amount_cents,\n    'currency', v.currency, 'donation_cents', v.donation_cents, 'donation_plan', v.donation_plan, 'provider', v.provider,\n    'provider_ref', v.provider_ref, 'reference_code', v.reference_code, 'status', v.status,\n    'created_at', v.created_at, 'updated_at', v.updated_at, 'expires_at', v.expires_at)\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_mark",
+      "args": "p_id uuid, p_status text, p_provider_ref text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_mark(p_id uuid, p_status text, p_provider_ref text)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_status text;\nbegin\n  if p_status not in ('processing', 'failed', 'expired', 'refunded', 'incomplete', 'pending', 'cancelled') then\n    raise exception 'invalid payment status' using errcode = '22023';\n  end if;\n  select status into v_status from public.verification_payments where id = p_id for update;\n  if not found then return 'not_found'; end if;\n  if v_status = 'paid' and p_status <> 'refunded' then return 'paid'; end if;\n  update public.verification_payments set status = p_status, provider_ref = coalesce(p_provider_ref, provider_ref),\n         updated_at = pg_catalog.now()\n   where id = p_id;\n  return 'updated';\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_open",
+      "args": "p_provider text, p_amount integer, p_donation integer, p_plan text, p_reference text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_open(p_provider text, p_amount integer, p_donation integer, p_plan text, p_reference text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_require_member(); r public.verification_payments;\nbegin\n  if p_provider not in ('stripe', 'sepa', 'bunq') or p_amount not between 0 and 100000\n     or coalesce(p_donation, 0) not between 0 and 100000 or p_plan not in ('none', 'one_time', 'monthly', 'yearly')\n     or p_reference !~ '^ROUT-[0-9]{4}$' then\n    raise exception 'invalid payment' using errcode = '22023';\n  end if;\n  insert into public.verification_payments (user_id, tier, amount_cents, donation_cents, donation_plan, provider, reference_code, status)\n  values (v, 'early_believer', p_amount, coalesce(p_donation, 0), p_plan, p_provider, p_reference, 'pending')\n  returning * into r;\n  return public.rout_vp_json(r);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_paid_sequence",
+      "args": "p_at timestamp with time zone",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_paid_sequence(p_at timestamp with time zone)\n RETURNS integer\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select pg_catalog.count(*)::int from public.verification_payments where status = 'paid' and created_at <= p_at\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_reprice",
+      "args": "p_id uuid, p_amount integer, p_donation integer, p_plan text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_reprice(p_id uuid, p_amount integer, p_donation integer, p_plan text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_require_member();\nbegin\n  if p_amount not between 0 and 100000 or coalesce(p_donation, 0) not between 0 and 100000\n     or p_plan not in ('none', 'one_time', 'monthly', 'yearly') then\n    raise exception 'invalid payment' using errcode = '22023';\n  end if;\n  update public.verification_payments\n     set amount_cents = p_amount, donation_cents = coalesce(p_donation, 0), donation_plan = p_plan, updated_at = pg_catalog.now()\n   where id = p_id and user_id = v and provider = 'stripe' and status in ('pending', 'incomplete');\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_sepa_candidates",
+      "args": "p_amount integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_sepa_candidates(p_amount integer)\n RETURNS SETOF jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select public.rout_vp_json(v) from (\n    select * from public.verification_payments\n     where provider = 'sepa' and status <> 'paid' order by created_at desc limit 50) v\n   where v.amount_cents + coalesce(v.donation_cents, 0) = p_amount\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_vp_transfer_scan",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_vp_transfer_scan()\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_open int; v_expired int;\nbegin\n  update public.verification_payments set expires_at = created_at + interval '7 days'\n   where expires_at is null and status in ('pending', 'awaiting_transfer');\n  update public.verification_payments set last_scanned_at = pg_catalog.now()\n   where status in ('pending', 'awaiting_transfer');\n  get diagnostics v_open = row_count;\n  update public.verification_payments set status = 'expired', updated_at = pg_catalog.now()\n   where status in ('pending', 'awaiting_transfer') and expires_at is not null and expires_at < pg_catalog.now();\n  get diagnostics v_expired = row_count;\n  return pg_catalog.jsonb_build_object('scanned', v_open, 'expired', v_expired);\nend $function$"
     },
     {
       "schema": "public",
