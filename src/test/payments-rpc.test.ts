@@ -101,6 +101,23 @@ describe("tables are closed to the app role", () => {
     const own = await asApp(ALICE, "select provider, last4 from public.psp_credentials");
     expect(own).toEqual([{ provider: "stripe", last4: "1234" }]);
   });
+
+  it("no other database role can call the payment functions", async () => {
+    await db.exec("create role other_login");
+    for (const call of [
+      "select public.rout_gift_card_activate(gen_random_uuid(), null, 1, null, null)",
+      "select * from public.rout_promo_redeem('X')",
+      "select public.rout_vp_claim_paid(gen_random_uuid(), 'pi_x')",
+      "select * from public.rout_psp_tip_credential(gen_random_uuid(), 'stripe')",
+    ]) {
+      await db.exec("set role other_login");
+      try {
+        await expect(db.query(call)).rejects.toThrow(/permission denied/);
+      } finally {
+        await db.exec("reset role");
+      }
+    }
+  });
 });
 
 describe("pricing", () => {
