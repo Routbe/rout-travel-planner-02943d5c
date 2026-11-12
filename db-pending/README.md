@@ -2,10 +2,10 @@
 
 CONTRACT steps that remove legacy access. They stay out of `db/` (every file
 there is replayed by the runners) until the deployed app uses the matching
-EXPAND functions. Move a file into `db/` only when production runs that code.
+EXPAND functions. Move a file into `db/` only when production runs that code
+(the public health probe reports `schema` at or above the EXPAND number).
 
-- `0230_oauth_lockdown.sql` — after `db/0228_oauth_rpc.sql` code is live on Vercel.
-- `0231_payments_lockdown.sql` — after `db/0229_payments_and_promos_rpc.sql` code is live on Vercel.
-- `0233_abuse_lockdown.sql` — after `db/0232_abuse_and_stateless_auth_rpc.sql` code is live on Vercel.
-- `0235_security_logs_lockdown.sql` — after `db/0234_security_logs_webhooks_rpc.sql` code is live on Vercel.
-- `0237_identity_entitlements_lockdown.sql` — after `db/0236_identity_entitlements_rpc.sql` code is live on Vercel.
+- `0239_public_profiles_stats_lockdown.sql` — after `db/0238_public_profiles_stats_rpc.sql` code is live on Vercel (health `schema` >= 0238).
+- `0241_agenda_jobs_cache_lockdown.sql` — after `db/0240_agenda_jobs_cache_rpc.sql` code is live on Vercel (health `schema` >= 0240).
+
+Applied and moved into `db/`: 0230, 0231, 0233, 0235, 0237 (production reported 0236).

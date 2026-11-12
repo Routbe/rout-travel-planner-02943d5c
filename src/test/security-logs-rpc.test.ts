@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * db/0234 + db-pending/0235 over the real SQL (PGlite, as rout_app): security
+ * db/0234 + db/0235 over the real SQL (PGlite, as rout_app): security
  * logs, webhook bookkeeping and the SEPA review queue are closed to the app role.
  * Writes without a member session go through validating functions, admins read
  * through session-bound policies, and the audit log stays append-only.
@@ -98,7 +98,7 @@ beforeAll(async () => {
       alter table public.${t} enable row level security;
       create policy rout_server on public.${t} to rout_app using (true) with check (true);`);
   }
-  for (const f of ["db/0234_security_logs_webhooks_rpc.sql", "db-pending/0235_security_logs_lockdown.sql"]) {
+  for (const f of ["db/0234_security_logs_webhooks_rpc.sql", "db/0235_security_logs_lockdown.sql"]) {
     await db.exec(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"));
   }
 }, 30_000);

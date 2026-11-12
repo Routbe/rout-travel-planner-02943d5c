@@ -1754,14 +1754,7 @@
           "check": "true"
         }
       ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "grants": {}
     },
     {
       "schema": "public",
@@ -2906,26 +2899,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -3369,8 +3344,7 @@
         "rout_app": [
           "DELETE",
           "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -5028,24 +5002,11 @@
           "cmd": "SELECT",
           "using": "true",
           "check": null
-        },
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
         }
       ],
       "grants": {
         "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -5830,6 +5791,16 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "booking_requests_host_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "(profile_id = ( SELECT rout_current_user_id() AS rout_current_user_id))",
+          "check": null
         }
       ],
       "grants": {
@@ -7253,6 +7224,16 @@
       "forceRls": false,
       "policies": [
         {
+          "name": "contact_submissions_admin_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "( SELECT rout_caller_is_admin() AS rout_caller_is_admin)",
+          "check": null
+        },
+        {
           "name": "rout_server",
           "permissive": true,
           "roles": [
@@ -7487,26 +7468,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -7548,26 +7511,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -7966,26 +7911,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -8350,26 +8277,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -8785,26 +8694,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -9542,26 +9433,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -9893,26 +9766,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -11097,6 +10952,16 @@
       "forceRls": false,
       "policies": [
         {
+          "name": "lead_captures_owner_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "(lower(handle) = ( SELECT rout_current_username() AS rout_current_username))",
+          "check": null
+        },
+        {
           "name": "rout_server",
           "permissive": true,
           "roles": [
@@ -11229,6 +11094,26 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "links_owner_delete",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "((profile_id = ( SELECT rout_current_user_id() AS rout_current_user_id)) OR ( SELECT rout_caller_is_admin() AS rout_caller_is_admin))",
+          "check": null
+        },
+        {
+          "name": "links_owner_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "((profile_id = ( SELECT rout_current_user_id() AS rout_current_user_id)) OR ( SELECT rout_caller_is_admin() AS rout_caller_is_admin))",
+          "check": null
         }
       ],
       "grants": {
@@ -11315,26 +11200,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -11400,26 +11267,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -12025,10 +11874,7 @@
       ],
       "grants": {
         "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "DELETE"
         ]
       }
     },
@@ -12085,26 +11931,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -12188,26 +12016,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -12708,9 +12518,7 @@
       "grants": {
         "rout_app": [
           "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -12788,26 +12596,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -13343,26 +13133,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -15136,6 +14908,16 @@
       "forceRls": false,
       "policies": [
         {
+          "name": "platform_integration_switches_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "true",
+          "check": null
+        },
+        {
           "name": "rout_server",
           "permissive": true,
           "roles": [
@@ -15544,26 +15326,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -16220,6 +15984,16 @@
       "rls": true,
       "forceRls": false,
       "policies": [
+        {
+          "name": "profile_link_clicks_owner_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "(profile_user_id = ( SELECT rout_current_user_id() AS rout_current_user_id))",
+          "check": null
+        },
         {
           "name": "rout_server",
           "permissive": true,
@@ -17681,26 +17455,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -17844,26 +17600,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -18200,10 +17938,7 @@
       ],
       "grants": {
         "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "DELETE"
         ]
       }
     },
@@ -18694,6 +18429,26 @@
       "forceRls": false,
       "policies": [
         {
+          "name": "qr_scans_scope_delete",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "(( SELECT rout_caller_is_admin() AS rout_caller_is_admin) OR (tracked_qr_id IN ( SELECT rout_accessible_tracked_qr_ids() AS rout_accessible_tracked_qr_ids)))",
+          "check": null
+        },
+        {
+          "name": "qr_scans_scope_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "(( SELECT rout_caller_is_admin() AS rout_caller_is_admin) OR (tracked_qr_id IN ( SELECT rout_accessible_tracked_qr_ids() AS rout_accessible_tracked_qr_ids)))",
+          "check": null
+        },
+        {
           "name": "rout_server",
           "permissive": true,
           "roles": [
@@ -18755,26 +18510,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -19126,26 +18863,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -19386,24 +19105,11 @@
           "cmd": "SELECT",
           "using": "true",
           "check": null
-        },
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
         }
       ],
       "grants": {
         "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -19973,16 +19679,6 @@
       "forceRls": false,
       "policies": [
         {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        },
-        {
           "name": "security_audit_purge",
           "permissive": true,
           "roles": [
@@ -20005,10 +19701,7 @@
       ],
       "grants": {
         "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "DELETE"
         ]
       }
     },
@@ -20199,14 +19892,7 @@
           "check": "true"
         }
       ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "grants": {}
     },
     {
       "schema": "public",
@@ -20418,9 +20104,7 @@
       "grants": {
         "rout_app": [
           "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -20800,6 +20484,16 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "showcase_profiles_public_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "true",
+          "check": null
         }
       ],
       "grants": {
@@ -20859,26 +20553,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -21628,26 +21304,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -22055,26 +21713,8 @@
       ],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -25206,10 +24846,7 @@
       ],
       "grants": {
         "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -25859,25 +25496,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -26112,16 +25732,6 @@
       "forceRls": false,
       "policies": [
         {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        },
-        {
           "name": "webhook_events_admin_read",
           "permissive": true,
           "roles": [
@@ -26134,10 +25744,7 @@
       ],
       "grants": {
         "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -28302,6 +27909,12 @@
     },
     {
       "schema": "public",
+      "name": "rout_accessible_tracked_qr_ids",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_accessible_tracked_qr_ids()\n RETURNS SETOF uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select t.id from public.tracked_qrs t\n   where public.rout_current_user_id() is not null\n     and (t.user_id = public.rout_current_user_id()\n          or (t.workspace_id is not null and public.rout_is_workspace_member(t.workspace_id)))\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_admin_bootstrap_claim",
       "args": "p_token_hash text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_admin_bootstrap_claim(p_token_hash text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null or p_token_hash is null or p_token_hash !~ '^[0-9a-f]{64}$' then return false; end if;\n  perform pg_advisory_xact_lock(hashtextextended('rout.admin_bootstrap', 0));\n  if public.rout_any_admin() then return false; end if;\n  if (select u.id from public.users u order by u.created_at asc limit 1) is distinct from v_user then return false; end if;\n  insert into public.admin_bootstrap_tokens (token_hash, consumed_by, consumed_at)\n  values (p_token_hash, v_user, now()) on conflict (token_hash) do nothing;\n  if not found then return false; end if;\n  insert into public.user_roles (user_id, role) values (v_user, 'admin') on conflict (user_id, role) do nothing;\n  perform public.rout_audit_insert(v_user, (select email from public.users where id = v_user),\n    'ADMIN_BOOTSTRAP_CLAIMED', v_user, null, null);\n  return true;\nend $function$"
@@ -28404,6 +28017,42 @@
     },
     {
       "schema": "public",
+      "name": "rout_alias_job_enqueue",
+      "args": "p_user uuid, p_action text, p_payload jsonb, p_max_attempts integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_alias_job_enqueue(p_user uuid, p_action text, p_payload jsonb, p_max_attempts integer)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_id uuid;\nbegin\n  if p_user is null or p_action not in ('provision', 'rename', 'pause', 'resume', 'delete', 'freeze')\n     or pg_catalog.octet_length(coalesce(p_payload, '{}'::jsonb)::text) > 4096\n     or p_max_attempts is null or p_max_attempts not between 1 and 10 then\n    raise exception 'invalid alias job' using errcode = '22023';\n  end if;\n  insert into public.alias_sync_jobs (user_id, action, payload, max_attempts)\n  values (p_user, p_action, coalesce(p_payload, '{}'::jsonb), p_max_attempts)\n  returning id into v_id;\n  return v_id;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_alias_job_finish",
+      "args": "p_id uuid, p_status text, p_attempts integer, p_error text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_alias_job_finish(p_id uuid, p_status text, p_attempts integer, p_error text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_status not in ('done', 'failed', 'pending') or p_attempts is null or p_attempts not between 0 and 100\n     or coalesce(pg_catalog.length(p_error), 0) > 2000 then\n    raise exception 'invalid alias job result' using errcode = '22023';\n  end if;\n  update public.alias_sync_jobs j\n     set status = p_status, attempts = p_attempts, last_error = case when p_status = 'done' then null else p_error end,\n         updated_at = pg_catalog.now()\n   where j.id = p_id and j.status = 'pending';\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_alias_job_requeue_user",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_alias_job_requeue_user(p_user uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not exists (select 1 from public.alias_sync_jobs j where j.user_id = p_user and j.status in ('failed', 'pending')) then\n    return false;\n  end if;\n  update public.alias_sync_jobs j set status = 'pending', attempts = 0, last_error = null, updated_at = pg_catalog.now()\n   where j.user_id = p_user and j.status = 'failed';\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_alias_jobs_pending",
+      "args": "p_limit integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_alias_jobs_pending(p_limit integer)\n RETURNS TABLE(id uuid, user_id uuid, action text, payload jsonb, attempts integer, max_attempts integer)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select j.id, j.user_id, j.action, j.payload, j.attempts, j.max_attempts from public.alias_sync_jobs j\n   where j.status = 'pending' and p_limit between 1 and 100\n   order by j.created_at asc limit p_limit\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_alias_jobs_retry_failed",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_alias_jobs_retry_failed()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare n int;\nbegin\n  update public.alias_sync_jobs j set status = 'pending', attempts = 0, last_error = null, updated_at = pg_catalog.now()\n   where j.status = 'failed';\n  get diagnostics n = row_count;\n  return n;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_alias_queue_summary",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_alias_queue_summary()\n RETURNS TABLE(status text, count integer)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select j.status, pg_catalog.count(*)::int from public.alias_sync_jobs j\n   where j.status in ('pending', 'failed', 'done') group by j.status\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_altcha_purge",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_altcha_purge()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare n int;\nbegin\n  delete from public.altcha_used where expires_at < pg_catalog.now();\n  get diagnostics n = row_count;\n  return n;\nend $function$"
@@ -28485,6 +28134,24 @@
       "name": "rout_auth_secrets_purge",
       "args": "p_user uuid",
       "def": "CREATE OR REPLACE FUNCTION public.rout_auth_secrets_purge(p_user uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_purge_due(p_user) then raise exception 'purge_not_due' using errcode = '42501'; end if;\n  delete from public.auth_tokens where user_id = p_user;\n  delete from public.security_codes where user_id = p_user;\n  delete from public.phone_otp_codes where user_id = p_user;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_availability_claim_due",
+      "args": "p_limit integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_availability_claim_due(p_limit integer)\n RETURNS TABLE(user_id uuid, attempts integer)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_limit is null or p_limit not between 1 and 100 then\n    raise exception 'invalid limit' using errcode = '22023';\n  end if;\n  return query\n    delete from public.availability_jobs j where j.user_id in (\n      select d.user_id from public.availability_jobs d where d.run_after <= pg_catalog.now()\n       order by d.run_after limit p_limit for update skip locked)\n    returning j.user_id, j.attempts;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_availability_enqueue",
+      "args": "p_user uuid, p_reason text, p_delay_seconds integer, p_replace_reason boolean",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_availability_enqueue(p_user uuid, p_reason text, p_delay_seconds integer DEFAULT 0, p_replace_reason boolean DEFAULT true)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_user is null or p_reason is null or p_reason !~ '^[a-z_]{1,40}$'\n     or p_delay_seconds is null or p_delay_seconds not between 0 and 86400 then\n    raise exception 'invalid availability job' using errcode = '22023';\n  end if;\n  insert into public.availability_jobs (user_id, reason, run_after)\n  values (p_user, p_reason, pg_catalog.now() + pg_catalog.make_interval(secs => p_delay_seconds))\n  on conflict (user_id) do update\n    set reason = case when p_replace_reason then excluded.reason else public.availability_jobs.reason end,\n        run_after = least(public.availability_jobs.run_after, excluded.run_after);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_availability_retry",
+      "args": "p_user uuid, p_attempts integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_availability_retry(p_user uuid, p_attempts integer)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_user is null or p_attempts is null or p_attempts < 0 or p_attempts >= 5 then return false; end if;\n  insert into public.availability_jobs (user_id, reason, run_after, attempts)\n  values (p_user, 'retry', pg_catalog.now() + pg_catalog.make_interval(mins => (2 ^ p_attempts)::int), p_attempts + 1)\n  on conflict (user_id) do nothing;\n  return found;\nend $function$"
     },
     {
       "schema": "public",
@@ -28632,6 +28299,18 @@
     },
     {
       "schema": "public",
+      "name": "rout_booking_request_create",
+      "args": "p_profile uuid, p_guest_name text, p_guest_email text, p_date date, p_time text, p_message text, p_duration integer, p_title text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_booking_request_create(p_profile uuid, p_guest_name text, p_guest_email text, p_date date, p_time text, p_message text, p_duration integer, p_title text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_id uuid;\nbegin\n  if p_profile is null or p_guest_name is null or pg_catalog.length(p_guest_name) not between 2 and 120\n     or p_guest_email is null or pg_catalog.length(p_guest_email) not between 3 and 254 or pg_catalog.strpos(p_guest_email, '@') = 0\n     or p_date is null or p_time is null or p_time !~ '^[0-9]{2}:[0-9]{2}$'\n     or coalesce(pg_catalog.length(p_message), 0) > 500\n     or p_duration is null or p_duration not between 5 and 1440\n     or coalesce(pg_catalog.length(p_title), 0) > 200 then\n    raise exception 'invalid booking request' using errcode = '22023';\n  end if;\n  if not exists (\n    select 1 from public.profiles p\n     cross join lateral pg_catalog.jsonb_array_elements(case when pg_catalog.jsonb_typeof(p.blocks) = 'array' then p.blocks else '[]'::jsonb end) b(el)\n     where p.id = p_profile and b.el->>'kind' = 'booking_request'\n       and coalesce(b.el->'hidden', 'false'::jsonb) <> 'true'::jsonb) then\n    raise exception 'no booking form' using errcode = 'P0002';\n  end if;\n  insert into public.booking_requests (profile_id, guest_name, guest_email, preferred_date, preferred_time,\n    guest_message, duration_minutes, title)\n  values (p_profile, p_guest_name, p_guest_email, p_date, p_time, p_message, p_duration, p_title)\n  returning id into v_id;\n  return v_id;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_booking_request_resolve",
+      "args": "p_id uuid, p_action text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_booking_request_resolve(p_id uuid, p_action text)\n RETURNS TABLE(id uuid, profile_id uuid, guest_name text, guest_email text, preferred_date date, preferred_time text, guest_message text, duration_minutes integer, title text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_action not in ('accept', 'decline') then\n    raise exception 'invalid booking action' using errcode = '22023';\n  end if;\n  return query\n    update public.booking_requests r\n       set status = case when p_action = 'accept' then 'accepted' else 'declined' end, updated_at = pg_catalog.now()\n     where r.id = p_id and r.status = 'pending'\n    returning r.id, r.profile_id, r.guest_name, r.guest_email, r.preferred_date, r.preferred_time,\n              r.guest_message, r.duration_minutes, r.title;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_booking_set_checkout",
       "args": "p_booking uuid, p_session text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_booking_set_checkout(p_booking uuid, p_session text)\n RETURNS boolean\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  update public.bookings set stripe_checkout_session_id = p_session, updated_at = now()\n  where id = p_booking and status = 'pending_payment' and stripe_checkout_session_id is null\n    and p_session ~ '^cs_[A-Za-z0-9_]{8,250}$'\n  returning true\n$function$"
@@ -28740,9 +28419,27 @@
     },
     {
       "schema": "public",
+      "name": "rout_contact_submission_create",
+      "args": "p_name text, p_email text, p_subject text, p_message text, p_locale text, p_sender_hash text, p_portal_category text, p_category text, p_priority text, p_meta jsonb, p_attachment_key text, p_attachment_name text, p_attachment_size bigint, p_attachment_mime text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_contact_submission_create(p_name text, p_email text, p_subject text, p_message text, p_locale text, p_sender_hash text, p_portal_category text, p_category text, p_priority text, p_meta jsonb, p_attachment_key text, p_attachment_name text, p_attachment_size bigint, p_attachment_mime text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_id uuid;\nbegin\n  if p_name is null or pg_catalog.length(p_name) not between 1 and 100\n     or p_email is null or pg_catalog.length(p_email) not between 3 and 255 or pg_catalog.strpos(p_email, '@') = 0\n     or p_subject is null or pg_catalog.length(p_subject) not between 1 and 150\n     or p_message is null or pg_catalog.length(p_message) not between 1 and 2000\n     or p_locale not in ('nl', 'en', 'fr', 'de')\n     or coalesce(pg_catalog.length(p_sender_hash), 0) > 128\n     or coalesce(pg_catalog.length(p_portal_category), 0) > 40\n     or coalesce(pg_catalog.length(p_category), 0) > 40\n     or coalesce(pg_catalog.length(p_priority), 0) > 40\n     or pg_catalog.octet_length(coalesce(p_meta, '{}'::jsonb)::text) > 4096\n     or coalesce(pg_catalog.length(p_attachment_key), 0) > 300\n     or coalesce(pg_catalog.length(p_attachment_name), 0) > 120\n     or (p_attachment_size is not null and p_attachment_size not between 1 and 5242880)\n     or (p_attachment_mime is not null and p_attachment_mime not in ('image/png', 'image/jpeg', 'text/plain', 'application/json')) then\n    raise exception 'invalid contact submission' using errcode = '22023';\n  end if;\n  insert into public.contact_submissions (name, email, subject, message, locale, status, sender_hash, portal_category,\n    category, priority, meta, attachment_key, attachment_name, attachment_size, attachment_mime)\n  values (p_name, p_email, p_subject, p_message, p_locale, 'pending', p_sender_hash, p_portal_category,\n    p_category, p_priority, p_meta, p_attachment_key, p_attachment_name, p_attachment_size, p_attachment_mime)\n  returning id into v_id;\n  return v_id;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_contact_submission_finish",
+      "args": "p_id uuid, p_status text, p_error text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_contact_submission_finish(p_id uuid, p_status text, p_error text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_status not in ('sent', 'sent_partial', 'failed') or coalesce(pg_catalog.length(p_error), 0) > 1000 then\n    raise exception 'invalid contact status' using errcode = '22023';\n  end if;\n  update public.contact_submissions s set status = p_status, error_detail = p_error\n   where s.id = p_id and s.status = 'pending' and s.created_at > pg_catalog.now() - interval '1 hour';\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_current_user_id",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_current_user_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE\nAS $function$ select nullif(current_setting('rout.current_user_id',true),'')::uuid $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_current_username",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_current_username()\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select pg_catalog.lower(p.username) from public.profiles p where p.id = public.rout_current_user_id()\n$function$"
     },
     {
       "schema": "public",
@@ -28803,6 +28500,12 @@
       "name": "rout_ephemeral_vault_read",
       "args": "p_vault_id uuid",
       "def": "CREATE OR REPLACE FUNCTION public.rout_ephemeral_vault_read(p_vault_id uuid)\n RETURNS TABLE(vault_hash text, encrypted_payload text, expires_at timestamp with time zone)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select v.vault_hash, v.encrypted_payload, v.expires_at\n    from public.ephemeral_vaults v\n   where public.rout_current_user_id() is not null\n     and v.vault_id = p_vault_id and v.expires_at > now()\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_forwarding_send_check",
+      "args": "p_user uuid, p_recipient text, p_per_10min integer, p_per_day integer, p_per_recipient_day integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_forwarding_send_check(p_user uuid, p_recipient text, p_per_10min integer, p_per_day integer, p_per_recipient_day integer)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_recipient text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_recipient, ''))); r_recent int; r_daily int; r_rcpt int;\nbegin\n  if p_user is null or pg_catalog.length(v_recipient) not between 3 and 320 or pg_catalog.strpos(v_recipient, '@') = 0\n     or p_per_10min not between 1 and 100 or p_per_day not between 1 and 100 or p_per_recipient_day not between 1 and 100 then\n    raise exception 'invalid forwarding check' using errcode = '22023';\n  end if;\n  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('rout_fwd:' || p_user::text, 0));\n  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('rout_fwd_rcpt:' || v_recipient, 0));\n  select pg_catalog.count(*) filter (where s.sent_at > pg_catalog.now() - interval '10 minutes'),\n         pg_catalog.count(*) filter (where s.sent_at > pg_catalog.now() - interval '1 day')\n    into r_recent, r_daily\n    from public.forwarding_confirmation_sends s where s.user_id = p_user;\n  select pg_catalog.count(*) into r_rcpt from public.forwarding_confirmation_sends s\n   where pg_catalog.lower(s.recipient) = v_recipient and s.sent_at > pg_catalog.now() - interval '1 day';\n  if r_recent >= p_per_10min or r_daily >= p_per_day then return 'rate_limited_user'; end if;\n  if r_rcpt >= p_per_recipient_day then return 'rate_limited_recipient'; end if;\n  insert into public.forwarding_confirmation_sends (user_id, recipient) values (p_user, v_recipient);\n  return null;\nend $function$"
     },
     {
       "schema": "public",
@@ -28908,6 +28611,18 @@
     },
     {
       "schema": "public",
+      "name": "rout_integration_switch_set",
+      "args": "p_provider text, p_mode text, p_note text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_integration_switch_set(p_provider text, p_mode text, p_note text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_caller_has_admin_permission('manage_integrations') then\n    raise exception 'admin only' using errcode = '42501';\n  end if;\n  if p_provider is null or p_provider !~ '^[a-z0-9_-]{1,40}$' or p_mode not in ('on', 'paused', 'off')\n     or coalesce(pg_catalog.length(p_note), 0) > 500 then\n    raise exception 'invalid integration switch' using errcode = '22023';\n  end if;\n  insert into public.platform_integration_switches (provider, mode, note, updated_by, updated_at)\n  values (p_provider, p_mode, p_note, public.rout_current_user_id(), pg_catalog.now())\n  on conflict (provider) do update set mode = excluded.mode, note = excluded.note,\n    updated_by = excluded.updated_by, updated_at = pg_catalog.now();\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_integration_switches_admin_list",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_integration_switches_admin_list()\n RETURNS TABLE(provider text, mode text, note text, updated_at timestamp with time zone, updated_by_email text, links integer)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_caller_has_admin_permission('manage_integrations') then\n    raise exception 'admin only' using errcode = '42501';\n  end if;\n  return query\n    select s.provider, s.mode, s.note, s.updated_at, u.email,\n           (select pg_catalog.count(*)::int from public.user_integrations i where i.provider = s.provider)\n      from public.platform_integration_switches s\n      left join public.users u on u.id = s.updated_by;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_is_admin_member",
       "args": "p_user uuid",
       "def": "CREATE OR REPLACE FUNCTION public.rout_is_admin_member(p_user uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select p_user is not null and (public.rout_has_role(p_user, 'admin')\n      or exists (select 1 from public.admin_permissions p where p.user_id = p_user))\n$function$"
@@ -28920,9 +28635,21 @@
     },
     {
       "schema": "public",
+      "name": "rout_lead_capture_insert",
+      "args": "p_handle text, p_name text, p_email text, p_message text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_lead_capture_insert(p_handle text, p_name text, p_email text, p_message text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_handle text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_handle, ''))); v_id uuid;\nbegin\n  if pg_catalog.length(v_handle) not between 1 and 64\n     or coalesce(pg_catalog.length(p_name), 0) > 120\n     or p_email is null or pg_catalog.length(p_email) not between 3 and 254 or pg_catalog.strpos(p_email, '@') = 0\n     or coalesce(pg_catalog.length(p_message), 0) > 1000 then\n    raise exception 'invalid lead' using errcode = '22023';\n  end if;\n  if not exists (\n    select 1 from public.profiles p\n     cross join lateral pg_catalog.jsonb_array_elements(case when pg_catalog.jsonb_typeof(p.blocks) = 'array' then p.blocks else '[]'::jsonb end) b(el)\n     where pg_catalog.lower(p.username) = v_handle and b.el->>'kind' = 'contact_form'\n       and coalesce(b.el->'hidden', 'false'::jsonb) <> 'true'::jsonb) then\n    raise exception 'no contact form' using errcode = 'P0002';\n  end if;\n  insert into public.lead_captures (handle, name, email, message) values (v_handle, p_name, p_email, p_message)\n  returning id into v_id;\n  return v_id;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_like_literal",
       "args": "p text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_like_literal(p text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n  select '%' || replace(replace(replace(p, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%'\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_link_click_record",
+      "args": "p_handle text, p_block_id text, p_label text, p_space text, p_visitor_hash text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_link_click_record(p_handle text, p_block_id text, p_label text, p_space text, p_visitor_hash text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare\n  v_handle text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_handle, '')));\n  v_owner uuid;\nbegin\n  if pg_catalog.length(v_handle) not between 1 and 64\n     or p_block_id is null or pg_catalog.length(p_block_id) not between 1 and 64\n     or coalesce(pg_catalog.length(p_label), 0) > 120\n     or p_space not in ('root', 'alias')\n     or (p_visitor_hash is not null and pg_catalog.length(p_visitor_hash) > 128) then\n    raise exception 'invalid link click' using errcode = '22023';\n  end if;\n  select p.id into v_owner from public.profiles p where pg_catalog.lower(p.username) = v_handle limit 1;\n  if v_owner is null then\n    select a.user_id into v_owner from public.alias_profiles a where pg_catalog.lower(a.handle) = v_handle limit 1;\n  end if;\n  if v_owner is null then return false; end if;\n  insert into public.profile_link_clicks (profile_user_id, handle, block_id, label, space, visitor_hash)\n  values (v_owner, v_handle, p_block_id, nullif(p_label, ''), p_space, p_visitor_hash);\n  return true;\nend $function$"
     },
     {
       "schema": "public",
@@ -29178,6 +28905,36 @@
     },
     {
       "schema": "public",
+      "name": "rout_onboarding_draft_drop",
+      "args": "p_key text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_onboarding_draft_drop(p_key text)\n RETURNS void\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  delete from public.onboarding_drafts d where public.rout_onboarding_key_ok(p_key) and d.email = p_key\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_onboarding_draft_get",
+      "args": "p_key text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_onboarding_draft_get(p_key text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select d.draft from public.onboarding_drafts d where public.rout_onboarding_key_ok(p_key) and d.email = p_key limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_onboarding_draft_put",
+      "args": "p_key text, p_draft jsonb",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_onboarding_draft_put(p_key text, p_draft jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_onboarding_key_ok(p_key) or p_draft is null or pg_catalog.octet_length(p_draft::text) > 262144 then\n    raise exception 'invalid onboarding draft' using errcode = '22023';\n  end if;\n  insert into public.onboarding_drafts (email, draft, updated_at) values (p_key, p_draft, pg_catalog.now())\n  on conflict (email) do update set draft = excluded.draft, updated_at = pg_catalog.now();\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_onboarding_drafts_purge",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_onboarding_drafts_purge(p_user uuid)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare n int;\nbegin\n  if not public.rout_purge_due(p_user) then return 0; end if;\n  delete from public.onboarding_drafts d\n   where pg_catalog.lower(d.email) in (select pg_catalog.lower(u.email) from public.users u where u.id = p_user and u.email is not null);\n  get diagnostics n = row_count;\n  return n;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_onboarding_key_ok",
+      "args": "p_key text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_onboarding_key_ok(p_key text)\n RETURNS boolean\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n  select p_key is not null and pg_catalog.length(p_key) between 3 and 320\n     and ((p_key like 'token:%' and pg_catalog.length(p_key) between 7 and 86)\n          or (p_key not like 'token:%' and pg_catalog.strpos(p_key, '@') > 1 and p_key = pg_catalog.lower(p_key)))\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_pair_factory_card",
       "args": "hid uuid, proof_hash text, serial text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_pair_factory_card(hid uuid, proof_hash text, serial text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare uid uuid := public.rout_current_user_id();\ndeclare item public.factory_card_inventory%rowtype;\nbegin\n  if uid is null then return null; end if;\n  select * into item from public.factory_card_inventory\n    where hardware_id = hid and activation_hash = proof_hash\n      and status = 'pending' and user_id is null for update;\n  if not found then return null; end if;\n  -- Key and algorithm come exclusively from factory inventory, not the client.\n  insert into public.physical_keys\n    (hardware_id, user_id, card_serial, nfc_uid, public_key, key_alg, status)\n    values (item.hardware_id, uid, serial, item.nfc_uid, item.public_key, item.key_alg, 'active');\n  update public.factory_card_inventory set status = 'active', user_id = uid,\n    paired_at = now(), activation_hash = repeat('0', 64) where hardware_id = hid;\n  return hid;\nend $function$"
@@ -29271,6 +29028,18 @@
       "name": "rout_physical_key_audit",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_physical_key_audit()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if tg_op = 'INSERT' then\n    insert into public.physical_key_events (hardware_id, user_id, event) values (new.hardware_id, new.user_id, 'provisioned');\n  elsif new.status is distinct from old.status then\n    insert into public.physical_key_events (hardware_id, user_id, event) values (\n      new.hardware_id, new.user_id,\n      case new.status when 'active' then (case old.status when 'frozen' then 'unfrozen' else 'activated' end)\n                      when 'frozen' then 'frozen' else 'revoked' end);\n  end if;\n  -- A revoked key never comes back.\n  if tg_op = 'UPDATE' and old.status = 'revoked' and new.status <> 'revoked' then\n    raise exception 'revoked keys cannot be reactivated' using errcode = '42501';\n  end if;\n  return new;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_poll_tally",
+      "args": "p_poll_key text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_poll_tally(p_poll_key text)\n RETURNS TABLE(option_index integer, n integer)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select v.option_index, pg_catalog.count(*)::int from public.poll_votes v\n   where p_poll_key is not null and pg_catalog.length(p_poll_key) between 1 and 200 and v.poll_key = p_poll_key\n   group by v.option_index order by v.option_index\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_poll_vote",
+      "args": "p_poll_key text, p_option integer, p_voter_key text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_poll_vote(p_poll_key text, p_option integer, p_voter_key text)\n RETURNS TABLE(option_index integer, n integer)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_poll_key is null or pg_catalog.length(p_poll_key) not between 1 and 200\n     or p_option is null or p_option not between 0 and 5\n     or p_voter_key is null or p_voter_key !~ '^[0-9a-f]{64}$' then\n    raise exception 'invalid poll vote' using errcode = '22023';\n  end if;\n  insert into public.poll_votes (poll_key, option_index, voter_key) values (p_poll_key, p_option, p_voter_key)\n  on conflict (poll_key, voter_key) do nothing;\n  return query select t.option_index, t.n from public.rout_poll_tally(p_poll_key) t;\nend $function$"
     },
     {
       "schema": "public",
@@ -29646,6 +29415,12 @@
     },
     {
       "schema": "public",
+      "name": "rout_showcase_replace",
+      "args": "p_handles text[]",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_showcase_replace(p_handles text[])\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare h text; i int := 0;\nbegin\n  if not public.rout_caller_is_admin() then\n    raise exception 'admin only' using errcode = '42501';\n  end if;\n  if p_handles is null or coalesce(pg_catalog.array_length(p_handles, 1), 0) > 20 then\n    raise exception 'invalid showcase list' using errcode = '22023';\n  end if;\n  foreach h in array p_handles loop\n    if h is null or h !~ '^[a-z0-9._-]{1,64}$' then\n      raise exception 'invalid showcase handle' using errcode = '22023';\n    end if;\n  end loop;\n  delete from public.showcase_profiles where true;\n  foreach h in array p_handles loop\n    insert into public.showcase_profiles (handle, display_name, position, sort_order)\n    values (h, h, i, i) on conflict (handle) do nothing;\n    i := i + 1;\n  end loop;\n  return i;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_signin_throttle_failures",
       "args": "p_identity_hash text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_signin_throttle_failures(p_identity_hash text)\n RETURNS integer\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select coalesce((select t.failures from public.signin_throttle t\n                    where t.identity_hash = p_identity_hash\n                      and t.window_started_at > pg_catalog.now() - interval '15 minutes'), 0)\n$function$"
@@ -29829,6 +29604,24 @@
       "name": "rout_vp_transfer_scan",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_vp_transfer_scan()\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_open int; v_expired int;\nbegin\n  update public.verification_payments set expires_at = created_at + interval '7 days'\n   where expires_at is null and status in ('pending', 'awaiting_transfer');\n  update public.verification_payments set last_scanned_at = pg_catalog.now()\n   where status in ('pending', 'awaiting_transfer');\n  get diagnostics v_open = row_count;\n  update public.verification_payments set status = 'expired', updated_at = pg_catalog.now()\n   where status in ('pending', 'awaiting_transfer') and expires_at is not null and expires_at < pg_catalog.now();\n  get diagnostics v_expired = row_count;\n  return pg_catalog.jsonb_build_object('scanned', v_open, 'expired', v_expired);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_weather_cache_lease",
+      "args": "p_key text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_weather_cache_lease(p_key text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_key is null or p_key !~ '^[0-9a-f]{64}$' then\n    raise exception 'invalid weather key' using errcode = '22023';\n  end if;\n  insert into public.ambient_weather_cache (city_key, refresh_after) values (p_key, pg_catalog.now() + interval '30 minutes')\n  on conflict (city_key) do update set refresh_after = excluded.refresh_after\n   where public.ambient_weather_cache.refresh_after <= pg_catalog.now();\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_weather_cache_read",
+      "args": "p_key text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_weather_cache_read(p_key text)\n RETURNS TABLE(state text, checked_at json)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select c.state, pg_catalog.to_json(c.checked_at) from public.ambient_weather_cache c\n   where p_key ~ '^[0-9a-f]{64}$' and c.city_key = p_key limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_weather_cache_store",
+      "args": "p_key text, p_state text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_weather_cache_store(p_key text, p_state text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_key is null or p_key !~ '^[0-9a-f]{64}$'\n     or (p_state is not null and p_state not in ('Clear', 'Rain', 'Snow', 'Thunderstorm', 'Clouds/Fog')) then\n    raise exception 'invalid weather state' using errcode = '22023';\n  end if;\n  update public.ambient_weather_cache c set state = p_state, checked_at = pg_catalog.now() where c.city_key = p_key;\n  return found;\nend $function$"
     },
     {
       "schema": "public",

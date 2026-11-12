@@ -56,15 +56,13 @@ async function fetchJson(url: URL) {
 /** Server-to-server only. Provider never receives visitor IPs, user IDs or webhook tokens. */
 export async function cachedCityWeather(city: string): Promise<WeatherState | null> {
   const key = await digest(city.toLocaleLowerCase("en").trim());
-  const existing = await weatherQuery<Row>("select state, to_json(checked_at) as checked_at from public.ambient_weather_cache where city_key = $1 limit 1", [key]);
+  const existing = await weatherQuery<Row>("select state, checked_at from public.rout_weather_cache_read($1)", [key]);
   const row = existing[0];
   const stored = WEATHER_STATES.find((s) => s === row?.state) ?? null;
   if (weatherCacheFresh(typeof row?.checked_at === "string" ? row.checked_at : null)) return stored;
   // Atomic lease prevents concurrent visitors from making the same API calls.
-  const lease = await weatherQuery<Row>(`insert into public.ambient_weather_cache (city_key, refresh_after) values ($1, now() + interval '30 minutes')
-    on conflict (city_key) do update set refresh_after = excluded.refresh_after
-    where public.ambient_weather_cache.refresh_after <= now() returning city_key`, [key]);
-  if (!lease.length) return stored;
+  const lease = await weatherQuery<Row>("select public.rout_weather_cache_lease($1) as leased", [key]);
+  if (lease[0]?.["leased"] !== true) return stored;
   let state: WeatherState | null = null;
   try {
     const [name, countryHint] = city.split(",").map((p) => p.trim());
@@ -86,7 +84,7 @@ export async function cachedCityWeather(city: string): Promise<WeatherState | nu
     console.warn("[ambient-weather] provider unavailable", error instanceof Error ? error.message : "unknown");
   }
   // Fail neutral, never replace an unknown condition with fake sunny weather.
-  await weatherQuery<Row>("update public.ambient_weather_cache set state = $2, checked_at = now() where city_key = $1 returning city_key", [key, state]);
+  await weatherQuery<Row>("select public.rout_weather_cache_store($1, $2) as stored", [key, state]);
   return state;
 }
 

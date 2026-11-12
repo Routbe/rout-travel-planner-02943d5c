@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * db/0229 + db-pending/0231 over the real SQL (PGlite, as rout_app): after the
+ * db/0229 + db/0231 over the real SQL (PGlite, as rout_app): after the
  * lockdown the payment, gift-card, promo and pricing tables are closed to the
  * app role; money only moves through the database functions. Covers the rules
  * the owner asked for: no double spend of gift cards or promo codes, webhooks
@@ -81,7 +81,7 @@ beforeAll(async () => {
       alter table public.${t} enable row level security;
       create policy rout_server on public.${t} to rout_app using (true) with check (true);`);
   }
-  for (const f of ["db/0229_payments_and_promos_rpc.sql", "db-pending/0231_payments_lockdown.sql"]) {
+  for (const f of ["db/0229_payments_and_promos_rpc.sql", "db/0231_payments_lockdown.sql"]) {
     await db.exec(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"));
   }
 }, 30_000);

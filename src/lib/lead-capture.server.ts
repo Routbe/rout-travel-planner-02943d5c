@@ -47,8 +47,7 @@ export async function captureLead(input: LeadInput): Promise<{ ok: boolean; mess
 
   try {
     await sql`
-      insert into public.lead_captures (handle, name, email, message)
-      values (${input.handle.toLowerCase()}, ${input.name}, ${input.email}, ${input.message})
+      select public.rout_lead_capture_insert(${input.handle.toLowerCase()}, ${input.name}, ${input.email}, ${input.message})
     `;
   } catch (error) {
     console.error("[lead-capture] opslaan mislukt", error);

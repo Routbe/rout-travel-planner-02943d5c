@@ -36,10 +36,8 @@ export const saveShowcaseHandles = createServerFn({ method: "POST" })
     await assertAdminRole(context.userId);
     const sql = await db();
     const unique = [...new Set(data.handles)];
-    await sql`delete from public.showcase_profiles`;
-    for (let i = 0; i < unique.length; i++) {
-      await sql`insert into public.showcase_profiles (handle, position) values (${unique[i]}, ${i})`;
-    }
+    // Replaces the list in one transaction; the database re-checks the admin role (db/0238).
+    await sql`select public.rout_showcase_replace(${unique}::text[])`;
     return unique;
   });
 

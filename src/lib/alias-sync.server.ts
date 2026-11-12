@@ -50,9 +50,7 @@ export async function enqueueAliasJob(
 ) {
   try {
     const rows = (await sql`
-      insert into public.alias_sync_jobs (user_id, action, payload, max_attempts)
-      values (${userId}, ${action}, ${JSON.stringify(payload)}, ${MAX_ATTEMPTS})
-      returning id
+      select public.rout_alias_job_enqueue(${userId}::uuid, ${action}, ${JSON.stringify(payload)}::jsonb, ${MAX_ATTEMPTS}::int) as id
     `) as Row[];
     await markProfile(userId, "pending", 0, null);
     return { ok: true as const, jobId: (rows[0]?.["id"] as string | undefined) ?? null };
@@ -122,11 +120,7 @@ async function runJob(job: JobRow): Promise<{ ok: boolean; detail: string; retry
  */
 export async function drainAliasSyncQueue(limit = 10) {
   const data = (await sql`
-    select id, user_id, action, payload, attempts, max_attempts
-      from public.alias_sync_jobs
-     where status = 'pending'
-     order by created_at asc
-     limit ${limit}
+    select id, user_id, action, payload, attempts, max_attempts from public.rout_alias_jobs_pending(${limit}::int)
   `) as unknown as JobRow[];
 
   const jobs = data ?? [];
@@ -143,11 +137,7 @@ export async function drainAliasSyncQueue(limit = 10) {
     if (res.ok) {
       done += 1;
 
-      await sql`
-        update public.alias_sync_jobs
-           set status = 'done', attempts = ${attempts}, last_error = null, updated_at = now()
-         where id = ${job.id}
-      `;
+      await sql`select public.rout_alias_job_finish(${job.id}::uuid, 'done', ${attempts}::int, null)`;
 
       await markProfile(job.user_id, "synced", attempts, null);
       continue;
@@ -158,12 +148,7 @@ export async function drainAliasSyncQueue(limit = 10) {
     if (giveUp) failed += 1;
     else retrying += 1;
 
-    await sql`
-      update public.alias_sync_jobs
-         set status = ${giveUp ? "failed" : "pending"}, attempts = ${attempts},
-             last_error = ${res.detail}, updated_at = now()
-       where id = ${job.id}
-    `;
+    await sql`select public.rout_alias_job_finish(${job.id}::uuid, ${giveUp ? "failed" : "pending"}, ${attempts}::int, ${res.detail.slice(0, 2000)})`;
 
     await markProfile(job.user_id, giveUp ? "failed" : "pending", attempts, res.detail);
   }
@@ -173,11 +158,7 @@ export async function drainAliasSyncQueue(limit = 10) {
 
 /** Requeues every failed job so an admin can retry after fixing the API key. */
 export async function retryFailedAliasJobs() {
-  await sql`
-    update public.alias_sync_jobs
-       set status = 'pending', attempts = 0, last_error = null, updated_at = now()
-     where status = 'failed'
-  `;
+  await sql`select public.rout_alias_jobs_retry_failed()`;
   return drainAliasSyncQueue(25);
 }
 
@@ -187,21 +168,8 @@ export async function retryFailedAliasJobs() {
  * ImprovMX error straight away.
  */
 export async function requeueUserAlias(userId: string) {
-  const existing = (await sql`
-    select id from public.alias_sync_jobs
-     where user_id = ${userId} and status in ('failed', 'pending')
-     limit 1
-  `) as Row[];
-
-  if (existing.length > 0) {
-    await sql`
-      update public.alias_sync_jobs
-         set status = 'pending', attempts = 0, last_error = null, updated_at = now()
-       where user_id = ${userId} and status = 'failed'
-    `;
-  } else {
-    await enqueueAliasJob(userId, "provision");
-  }
+  const requeued = (await sql`select public.rout_alias_job_requeue_user(${userId}::uuid) as ok`) as Row[];
+  if (requeued[0]?.["ok"] !== true) await enqueueAliasJob(userId, "provision");
 
   return drainAliasSyncQueue(10);
 }
@@ -209,12 +177,7 @@ export async function requeueUserAlias(userId: string) {
 export type QueueSummary = { pending: number; failed: number; done: number };
 
 export async function aliasQueueSummary(): Promise<QueueSummary> {
-  const rows = (await sql`
-    select status, count(*)::int as count
-      from public.alias_sync_jobs
-     where status in ('pending', 'failed', 'done')
-     group by status
-  `) as Row[];
+  const rows = (await sql`select status, count from public.rout_alias_queue_summary()`) as Row[];
   const summary: QueueSummary = { pending: 0, failed: 0, done: 0 };
   for (const row of rows) {
     const status = row["status"] as keyof QueueSummary;

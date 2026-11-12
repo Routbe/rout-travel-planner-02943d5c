@@ -145,35 +145,30 @@ export const submitContactMessage = createServerFn({ method: "POST" })
       `[contact] step 1/3 db insert: name=${data.name.length}ch subject=${data.subject.length}ch message=${data.message.length}ch locale=${data.locale} portal=${data.category} triage=${triage.category}/${triage.priority}`,
     );
 
-    const { data: row, error: insertError } = await dbAdmin
-
-      .from("contact_submissions")
-      .insert({
-        name: data.name,
-        email: data.email,
-        subject: data.subject,
-        message: data.message,
-        locale: data.locale,
-        status: "pending",
-        sender_hash: senderHash,
-        portal_category: data.category,
-        category: triage.category,
-        priority: triage.priority,
-        meta: {
-          routHandle: data.routHandle || null,
-          companyName: data.companyName || null,
-          teamSize: data.teamSize ?? null,
-          bugComponent: data.bugComponent ?? null,
-          bugSeverity: data.bugSeverity ?? null,
-          partnershipType: data.partnershipType ?? null,
-        },
-        attachment_key: data.attachment?.key ?? null,
-        attachment_name: data.attachment?.name ?? null,
-        attachment_size: data.attachment?.size ?? null,
-        attachment_mime: data.attachment?.mime ?? null,
-      })
-      .select("id")
-      .single();
+    // Stored through a validating database function; the table is closed to the app role (db/0238).
+    let row: { id: string } | null = null;
+    let insertError: unknown = null;
+    try {
+      const { sql } = await import("@/lib/neon");
+      const inserted = (await sql`
+        select public.rout_contact_submission_create(
+          ${data.name}, ${data.email}, ${data.subject}, ${data.message}, ${data.locale}, ${senderHash ?? null},
+          ${data.category}, ${triage.category}, ${triage.priority},
+          ${JSON.stringify({
+            routHandle: data.routHandle || null,
+            companyName: data.companyName || null,
+            teamSize: data.teamSize ?? null,
+            bugComponent: data.bugComponent ?? null,
+            bugSeverity: data.bugSeverity ?? null,
+            partnershipType: data.partnershipType ?? null,
+          })}::jsonb,
+          ${data.attachment?.key ?? null}, ${data.attachment?.name ?? null},
+          ${data.attachment?.size ?? null}::bigint, ${data.attachment?.mime ?? null}) as id
+      `) as { id: string | null }[];
+      row = inserted[0]?.id ? { id: inserted[0].id } : null;
+    } catch (error) {
+      insertError = error;
+    }
 
     if (insertError) {
       console.error("[contact] db insert failed");
@@ -236,14 +231,11 @@ export const submitContactMessage = createServerFn({ method: "POST" })
 
     if (row?.id) {
       console.info(`[contact] finalising id=${row.id} status=${status}`);
-      const { error: updateError } = await dbAdmin
-        .from("contact_submissions")
-        .update({
-          status,
-          error_detail: failures.length > 0 ? failures.join(" | ").slice(0, 1000) : null,
-        })
-        .eq("id", row.id);
-      if (updateError) {
+      try {
+        const { sql } = await import("@/lib/neon");
+        await sql`select public.rout_contact_submission_finish(${row.id}::uuid, ${status},
+          ${failures.length > 0 ? failures.join(" | ").slice(0, 1000) : null})`;
+      } catch {
         console.error("[contact] status update failed");
       }
     }

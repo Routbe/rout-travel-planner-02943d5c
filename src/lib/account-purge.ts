@@ -17,7 +17,8 @@ export function accountPurgeStatements(userId: string, authId: string) {
         and cancelled_at is null and completed_at is null and purge_after <= now()) then 1 else 0 end as due`, params },
     { query: `select set_config('rout.purge_user_id', $1, true)`, params },
     { query: `delete from public.profile_subscribers where owner_user_id = $1`, params },
-    { query: `delete from public.onboarding_drafts where lower(email) in (select lower(email) from public.users where id = $1)`, params },
+    // Onboarding drafts are closed to the app role; the database re-checks that this deletion is due (db/0238).
+    { query: `select public.rout_onboarding_drafts_purge($1::uuid)`, params },
     ...PURGE_OWNER_TABLES.map((table) => ({ query: `delete from public.${table} where user_id = $1`, params })),
     // Sign-in codes are closed to the app role; the database re-checks that this deletion is due (db/0226).
     { query: `select public.rout_auth_secrets_purge($1::uuid)`, params },
