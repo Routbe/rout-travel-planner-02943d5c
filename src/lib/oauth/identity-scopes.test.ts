@@ -28,7 +28,7 @@ vi.mock("@/lib/neon", () => ({
       const r = db.assignments.get(String(vals[1]));
       return Promise.resolve(r ? [r] : []);
     }
-    if (q.includes("rout_oauth_client_get")) return Promise.resolve([{ c: { client_id: String(vals[0]), is_trusted_kyc_partner: db.trusted.has(String(vals[0])) } }]);
+    if (q.includes("rout_oauth_client_get")) return Promise.resolve([{ c: { client_id: String(vals[0]), name: "App", created_at: "2026-01-01T00:00:00Z", is_trusted_kyc_partner: db.trusted.has(String(vals[0])) } }]);
     if (q.includes("from public.oauth_clients")) return Promise.resolve([]);
     if (q.includes("from public.verified_identities"))
       return Promise.resolve([{ tier_1_real_human: true, tier_2_legal_identity: true, identity_nullifier: "n-1", national_id_nullifier: "nat-1", legal_name: "Jona Zeno Delplanche" }]);
