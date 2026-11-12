@@ -50,21 +50,13 @@ export const startBunqVerification = createServerFn({ method: "POST" })
 
     const reference = `ROUT-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const { data: payment, error } = await dbAdmin
-      .from("verification_payments")
-      .insert({
-        user_id: context.userId,
-        tier: "early_believer",
-        amount_cents: baseCents,
-        donation_cents: donationCents,
-        donation_plan: donationPlan,
-        provider: "bunq",
-        reference_code: reference,
-      })
-      .select("id")
-      .single();
-    if (error || !payment) {
-      console.error("[bunq] payment insert failed", error);
+    const { openPayment } = await import("./payments/verification-payment-store.server");
+    const payment = await openPayment({ provider: "bunq", amountCents: baseCents, donationCents, donationPlan, reference })
+      .catch((error: unknown) => {
+        console.error("[bunq] payment insert failed", error);
+        return null;
+      });
+    if (!payment) {
       return { ok: false as const, reason: "payment_record_failed" as const };
     }
 
@@ -90,12 +82,8 @@ export const startBunqVerification = createServerFn({ method: "POST" })
         clientRequestId: data.clientRequestId,
       });
       // Bewaar tab + rekening zodat de polling de status kan uitlezen.
-      const { sql } = await import("./neon");
-      await sql`
-        update public.verification_payments
-           set provider_ref = ${`bunqme:${tab.account.id}:${tab.tabId}`}, updated_at = now()
-         where id = ${payment.id}
-      `;
+      const { attachProviderRef } = await import("./payments/verification-payment-store.server");
+      await attachProviderRef(payment.id, `bunqme:${tab.account.id}:${tab.tabId}`);
       return {
         ok: true as const,
         free: false as const,
