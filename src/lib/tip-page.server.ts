@@ -292,7 +292,7 @@ export async function startPspTip(opts: { handle: string; amountCents: number; m
   try {
     if (page.psp.provider === "stripe") {
       // Ingebouwd: PaymentIntent op het account van de maker; de browser toont Stripe's eigen betaalvenster.
-      const publishableKey = (rows[0]["publishable_key"] as string | null) ?? null;
+      const publishableKey = (rows[0]?.["publishable_key"] as string | null) ?? null;
       if (!publishableKey) return { ok: false as const, message: "Deze maker moet zijn Stripe-koppeling vernieuwen." };
       const body = new URLSearchParams({
         amount: String(amount),
