@@ -66,3 +66,4 @@ use the editor.
 
 ## Staged database lockdowns
 - CONTRACT migrations that remove legacy access wait in db-pending/ until production runs the code using the matching EXPAND functions, then move into db/. Why: every file in db/ is replayed by the runners, so a premature contract would break the live deployment.
+- The public health probe reports CODE_SCHEMA_LEVEL (src/lib/schema-version.ts, kept equal to the highest db/ migration by a test); a held-back contract is applied only once production reports at least the level of its EXPAND migration. Why: it is the only outside proof of which code a deployment runs.
