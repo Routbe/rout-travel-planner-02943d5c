@@ -259,3 +259,16 @@ describe("signing keys", () => {
     expect(k2?.["private_jwk_sealed"]).toBe("s2");
   });
 });
+
+describe("account purge of codes", () => {
+  it("deletes a member's codes only when their deletion is due, and never reveals codes", async () => {
+    await issue(EVE, "c-eve");
+    await asApp(null, `delete from public.oauth_auth_codes where user_id = '${EVE}'`, [], EVE);
+    expect((await db.query("select * from public.oauth_auth_codes where user_id = $1", [EVE])).rows).toHaveLength(1);
+    await db.query("insert into public.account_deletions values ($1, null, null, now() - interval '1 minute')", [EVE]);
+    await expect(asApp(null, "select code_hash from public.oauth_auth_codes", [], EVE)).rejects.toThrow(/permission denied/);
+    await asApp(null, `delete from public.oauth_auth_codes where user_id = '${EVE}'`, [], EVE);
+    expect((await db.query("select * from public.oauth_auth_codes where user_id = $1", [EVE])).rows).toHaveLength(0);
+    await db.query("delete from public.account_deletions");
+  });
+});

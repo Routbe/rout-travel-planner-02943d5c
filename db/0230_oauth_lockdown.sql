@@ -3,7 +3,7 @@
 -- the 0228 functions (hold back with migrate-gateway --only until then).
 --
 -- After this file rout_app has, on these tables:
---   oauth_auth_codes                    delete own rows only during a due account purge
+--   oauth_auth_codes                    read user_id + delete, both only during a due account purge
 --   oauth_consents                      select/update(revoke) own rows, delete during a due purge
 --   oauth_signing_keys                  nothing (functions only)
 --   oauth_client_test_users             nothing (functions only)
@@ -18,5 +18,5 @@ begin
     execute format('revoke all on table public.%I from rout_app', t);
   end loop;
   grant select, update (revoked_at), delete on table public.oauth_consents to rout_app;
-  grant delete on table public.oauth_auth_codes to rout_app;
+  grant select (user_id), delete on table public.oauth_auth_codes to rout_app;
 end $$;

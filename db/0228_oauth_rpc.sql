@@ -501,12 +501,17 @@ do $$
 begin
   drop policy if exists rout_owner on public.oauth_consents;
   create policy rout_owner on public.oauth_consents for select to rout_app
-    using (user_id = public.rout_current_user_id());
+    using (user_id = public.rout_current_user_id() or public.rout_purge_due(user_id));
   drop policy if exists rout_owner_revoke on public.oauth_consents;
   create policy rout_owner_revoke on public.oauth_consents for update to rout_app
     using (user_id = public.rout_current_user_id()) with check (user_id = public.rout_current_user_id());
   drop policy if exists rout_owner_purge on public.oauth_consents;
   create policy rout_owner_purge on public.oauth_consents for delete to rout_app
+    using (public.rout_purge_due(user_id));
+  -- A DELETE ... WHERE user_id = $1 must also see the rows, so the purge gets a
+  -- matching read policy (only user_id is granted after 0230).
+  drop policy if exists rout_owner_purge_read on public.oauth_auth_codes;
+  create policy rout_owner_purge_read on public.oauth_auth_codes for select to rout_app
     using (public.rout_purge_due(user_id));
   drop policy if exists rout_owner_purge on public.oauth_auth_codes;
   create policy rout_owner_purge on public.oauth_auth_codes for delete to rout_app
