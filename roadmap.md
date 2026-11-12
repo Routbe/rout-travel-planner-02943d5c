@@ -17,6 +17,5 @@
 - [ ] Batch 7 contract — db-pending/0237_identity_entitlements_lockdown.sql once production health reports schema >= 0236 — credential_issue_requests, credential_issuer_blocks, identity_labels, account_merge_tickets, api_keys, reserved_handles, badges, entitlement_overrides, referrals, didit_monthly_usage
 - [ ] Batch 8 — public profile & analytics: links, profile_link_clicks, qr_scans, poll_votes, showcase_profiles, lead_captures, contact_submissions, onboarding_drafts
 - [ ] Batch 9 — agenda, jobs & caches: availability_jobs, booking_requests, alias_sync_jobs, forwarding_confirmation_sends, ambient_weather_cache, platform_integration_switches
-- [ ] Not yet assigned to a batch: verification_payments (still has rout_server next to its 0229 policies — check 0231 covers it)
 - [ ] Investigate migration drift: 0209/91 checksum differ, 95_question_stories + 0169_workspace_icon renamed
 - [ ] Blocked: recovery ceremony (2-of-3) until all rout_server policies are gone
