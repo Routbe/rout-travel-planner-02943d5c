@@ -86,16 +86,22 @@ export async function issueAdminGift(adminId: string, purchaserEmail: string, in
       maxRedemptions: input.maxRedemptions, expiresAt: input.expiresAt }));
     code = order.code;
   } else {
-    code = generatePromoCode();
-    await sql`insert into public.promo_codes (code, label, percent_off, amount_off_cents, max_discount_cents, max_redemptions, expires_at, active)
-      values (${code}, ${`${discount.percentOff}%`}, ${discount.percentOff}, 0, ${discount.maxDiscountCents}, ${input.maxRedemptions}, ${input.expiresAt ?? null}::timestamptz, true)`;
+    // 0229: admin-only function; a fresh code never overwrites an existing one.
+    code = "";
+    for (let attempt = 0; attempt < 5 && !code; attempt += 1) {
+      const candidate = generatePromoCode();
+      const rows = await sql`select public.rout_promo_admin_save(${candidate}, ${`${discount.percentOff}%`}, ${discount.percentOff}, 0,
+        ${discount.maxDiscountCents}, ${input.maxRedemptions}, ${input.expiresAt ?? null}::timestamptz, false) as ok`;
+      if (rows[0]?.ok === true) code = candidate;
+    }
+    if (!code) throw new Error("gift_code_generation_failed");
   }
   return { code, ...await sendAdminGift(adminId, code, input) };
 }
 
 /** Recipient stored with a fixed-value gift card, if any (percentage gifts store none). */
 export async function storedGiftRecipient(code: string): Promise<StoredGiftRecipient | null> {
-  const rows = await sql`select recipient_email, recipient_name, message from public.gift_cards where code = ${code} limit 1`;
+  const rows = await sql`select * from public.rout_gift_card_recipient(${code})`;
   const row = rows[0];
   if (!row) return null;
   const str = (v: unknown) => (typeof v === "string" && v ? v : null);
