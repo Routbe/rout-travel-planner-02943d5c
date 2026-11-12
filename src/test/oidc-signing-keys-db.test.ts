@@ -29,6 +29,11 @@ beforeAll(async () => {
     kid text primary key, private_jwk jsonb not null, public_jwk jsonb not null,
     created_at timestamptz not null default now(), retired_at timestamptz)`);
   await db.exec(readFileSync(join(__dirname, "..", "..", "db", "0112_oauth_signing_keys_sealed.sql"), "utf8"));
+  // The app reaches the keys only through the 0228 signing-key functions.
+  const rpc = readFileSync(join(__dirname, "..", "..", "db", "0228_oauth_rpc.sql"), "utf8");
+  const start = rpc.indexOf("-- ------------------------------------------------------------------ signing keys");
+  const end = rpc.indexOf("-- ------------------------------------------------------------------ consents");
+  await db.exec(rpc.slice(start, end));
   // A legacy plaintext key, as written by the old code.
   const pair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"])) as CryptoKeyPair;
   const priv = await crypto.subtle.exportKey("jwk", pair.privateKey);
