@@ -8,7 +8,7 @@ import { isValidRedirectUri, cleanRedirectUri, findMatchingRedirect, normalizeRe
  * verplicht en redirect-URI's worden exact vergeleken. De ondertekensleutel is
  * asymmetrisch (ES256); alleen de publieke helft verlaat de server via JWKS.
  */
-import { sql } from "@/lib/neon";
+import { sql, withDbContext } from "@/lib/neon";
 import { generateClientSecret, hashClientSecret, verifyClientSecret } from "./client-secret";
 import { pairwiseSubject, redirectSector } from "./subject";
 import { validAccessClaims } from "./token-policy";
