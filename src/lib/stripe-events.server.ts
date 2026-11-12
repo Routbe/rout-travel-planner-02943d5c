@@ -137,10 +137,10 @@ export async function applyStripeEvent(event: StripeEvent): Promise<string> {
     // What Stripe actually collected must equal the card value (checked in the
     // database, 0229); a non-EUR charge never matches.
     const giftObject = object as Record<string, unknown>;
-    const collected = Number(giftObject[event.type === "payment_intent.succeeded" ? "amount_received" : "amount_total"]);
-    const paidCents = String(giftObject["currency"] ?? "eur").toLowerCase() === "eur" && Number.isInteger(collected)
-      ? collected
-      : -1;
+    const rawAmount = giftObject[event.type === "payment_intent.succeeded" ? "amount_received" : "amount_total"];
+    const paidCents = String(giftObject["currency"] ?? "eur").toLowerCase() !== "eur"
+      ? -1
+      : typeof rawAmount === "number" && Number.isInteger(rawAmount) ? rawAmount : null;
     const outcome = await markGiftCardPaid({
       giftId: meta["gift_card_id"],
       reference: stringOf(object, "id") ?? event.id ?? null,
