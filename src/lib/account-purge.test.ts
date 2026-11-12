@@ -34,7 +34,10 @@ async function fixture() {
   await db.exec(`create table public.security_codes (user_id uuid, secret text);
     create table public.phone_otp_codes (user_id uuid, secret text);
     create function public.rout_auth_secrets_purge(p uuid) returns void language sql as
-      $f$ delete from public.security_codes where user_id = p; delete from public.phone_otp_codes where user_id = p; $f$;`);
+      $f$ delete from public.security_codes where user_id = p; delete from public.phone_otp_codes where user_id = p; $f$;
+    create function public.rout_onboarding_drafts_purge(p uuid) returns int language sql as
+      $f$ with d as (delete from public.onboarding_drafts where lower(email) in (select lower(email) from public.users where id = p) returning 1)
+          select count(*)::int from d $f$;`);
   await db.exec(`alter table security_audit_logs alter column user_id type text using user_id::text;
     alter table security_audit_logs add column created_at timestamptz not null default now();
     create table public.user_ledger_keys(user_id uuid references users(id) on delete cascade,key_id text,primary key(user_id,key_id));
