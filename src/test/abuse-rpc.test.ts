@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * db/0232 + db-pending/0233 over the real SQL (PGlite, as rout_app): after the
+ * db/0232 + db/0233 over the real SQL (PGlite, as rout_app): after the
  * lockdown the anti-abuse stores and the session-less sign-in tables are closed
  * to the app role. Covers the owner's rules: atomic rate limiting with window
  * cleanup, ALTCHA proofs burned once, one-time codes with a wrong-try counter,
@@ -54,7 +54,7 @@ beforeAll(async () => {
       create policy rout_server on public.${t} to rout_app using (true) with check (true);`);
   }
   await db.exec("grant usage on sequence public.login_codes_id_seq to rout_app");
-  for (const f of ["db/0232_abuse_and_stateless_auth_rpc.sql", "db-pending/0233_abuse_lockdown.sql"]) {
+  for (const f of ["db/0232_abuse_and_stateless_auth_rpc.sql", "db/0233_abuse_lockdown.sql"]) {
     await db.exec(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"));
   }
 }, 30_000);

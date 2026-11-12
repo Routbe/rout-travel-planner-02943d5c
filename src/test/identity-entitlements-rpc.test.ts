@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * db/0236 + db-pending/0237 over the real SQL (PGlite, as rout_app): identity,
+ * db/0236 + db/0237 over the real SQL (PGlite, as rout_app): identity,
  * credential and entitlement tables are closed to the app role. Covers the
  * owner's rules: the Plus credit cannot be spent twice, the Didit cap holds,
  * referrals keep one inviter, merge tickets are found only by exact hash, and
@@ -91,7 +91,7 @@ beforeAll(async () => {
       alter table public.${t} enable row level security;
       create policy rout_server on public.${t} to rout_app using (true) with check (true);`);
   }
-  for (const f of ["db/0236_identity_entitlements_rpc.sql", "db-pending/0237_identity_entitlements_lockdown.sql"]) {
+  for (const f of ["db/0236_identity_entitlements_rpc.sql", "db/0237_identity_entitlements_lockdown.sql"]) {
     await db.exec(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"));
   }
 }, 30_000);
