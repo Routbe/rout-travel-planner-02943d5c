@@ -422,16 +422,13 @@ export async function finalizeCardPayment(opts: {
       paymentId?: string;
     }
 > {
-  const rows = (await sql`
-    select id, user_id, status from public.verification_payments
-     where id = ${opts.paymentId} limit 1
-  `) as Row[];
-  const row = rows[0];
+  const { getPayment } = await import("./payments/verification-payment-store.server");
+  const row = await getPayment(opts.paymentId);
   // Zero-trust: alleen de eigenaar van deze betaling mag ze afronden.
-  if (!row || (row["user_id"] as string) !== opts.userId) {
+  if (!row || row.user_id !== opts.userId) {
     return { ok: false, reason: "not_found" };
   }
-  if (row["status"] === "paid") {
+  if (row.status === "paid") {
     return { ok: true, status: "succeeded", paymentId: opts.paymentId };
   }
 
@@ -493,23 +490,16 @@ export async function paymentIdForIntent(intentId: string): Promise<string | nul
   } catch (error) {
     console.error("[verification] intent lookup mislukt", error);
   }
-  const rows = (await sql`
-    select id from public.verification_payments
-     where provider_ref = ${intentId} order by created_at desc limit 1
-  `) as Row[];
-  return (rows[0]?.["id"] as string | undefined) ?? null;
+  const { findPaymentByProviderRef } = await import("./payments/verification-payment-store.server");
+  return (await findPaymentByProviderRef(intentId))?.id ?? null;
 }
 
 /** Marks a payment paid, flips the profile to Early Believer and provisions the alias. */
 export async function activateVerification(paymentId: string, providerRef: string | null) {
-  const paymentRows = (await sql`
-    select id, user_id, tier, status, donation_plan, amount_cents, donation_cents,
-           reference_code, provider, created_at
-
-      from public.verification_payments where id = ${paymentId} limit 1
-  `) as Row[];
-  const payment = paymentRows[0];
-  if (!payment) return false;
+  const store = await import("./payments/verification-payment-store.server");
+  const record = await store.getPayment(paymentId);
+  if (!record) return false;
+  const payment: Row = record;
   if (payment["status"] === "paid") return true;
 
   // Idempotentie-slot: alleen de transactie die de rij écht van "niet betaald"
@@ -517,13 +507,7 @@ export async function activateVerification(paymentId: string, providerRef: strin
   // geleverd (Stripe én bunq doen dat bij trage antwoorden), dan raakt de
   // tweede nul rijen en stopt hier — geen dubbele activatie, geen tweede
   // factuur-PDF, geen tweede Brevo-mail.
-  const claimed = (await sql`
-    update public.verification_payments
-       set status = 'paid', provider_ref = ${providerRef}, updated_at = now()
-     where id = ${payment["id"] as string} and status <> 'paid'
-    returning id
-  `) as Row[];
-  if (claimed.length === 0) return true;
+  if (!(await store.claimPaid(record.id, providerRef))) return true;
 
   const userId = payment["user_id"] as string;
   const profileRows = (await sql`
@@ -630,24 +614,13 @@ export async function markPaymentStatus(
   providerRef: string | null,
   reason?: string | null,
 ) {
-  const rows = (await sql`
-    select id, user_id, status from public.verification_payments where id = ${paymentId} limit 1
-  `) as Row[];
-  const payment = rows[0];
-  if (!payment) return false;
-  if (payment["status"] === "paid" && status !== "refunded") return true;
-
-  if (providerRef) {
-    await sql`
-      update public.verification_payments set status = ${status}, provider_ref = ${providerRef}, updated_at = now()
-       where id = ${payment["id"] as string}
-    `;
-  } else {
-    await sql`
-      update public.verification_payments set status = ${status}, updated_at = now()
-       where id = ${payment["id"] as string}
-    `;
-  }
+  const store = await import("./payments/verification-payment-store.server");
+  const record = await store.getPayment(paymentId);
+  if (!record) return false;
+  const payment: Row = record;
+  const outcome = await store.markStatus(record.id, status, providerRef);
+  if (outcome === "not_found") return false;
+  if (outcome === "paid") return true;
 
   const userId = payment["user_id"] as string;
   await sql`
@@ -686,14 +659,13 @@ export async function markPaymentStatus(
 
 /** Refund or chargeback: pulls the paid entitlements and badges back in. */
 export async function revokeVerification(paymentId: string, reason: string) {
-  const rows = (await sql`
-    select id, user_id from public.verification_payments where id = ${paymentId} limit 1
-  `) as Row[];
-  const payment = rows[0];
-  if (!payment) return false;
-  const userId = payment["user_id"] as string;
+  const store = await import("./payments/verification-payment-store.server");
+  const record = await store.getPayment(paymentId);
+  if (!record) return false;
+  const payment: Row = record;
+  const userId = record.user_id;
 
-  await sql`update public.verification_payments set status = 'refunded', updated_at = now() where id = ${payment["id"] as string}`;
+  await store.markStatus(record.id, "refunded");
 
   await sql`
     update public.profiles
@@ -722,17 +694,13 @@ export async function revokeVerification(paymentId: string, reason: string) {
 
 /** Recurring donation stopped: the lifetime verification stays, the badge does not. */
 export async function endRecurringDonation(paymentId: string) {
-  const rows = (await sql`
-    select id, user_id from public.verification_payments where id = ${paymentId} limit 1
-  `) as Row[];
-  const payment = rows[0];
-  if (!payment) return false;
-  const userId = payment["user_id"] as string;
+  const store = await import("./payments/verification-payment-store.server");
+  const record = await store.getPayment(paymentId);
+  if (!record) return false;
+  const payment: Row = record;
+  const userId = record.user_id;
 
-  await sql`
-    update public.verification_payments set donation_plan = 'none', donation_cents = 0, updated_at = now()
-     where id = ${payment["id"] as string}
-  `;
+  await store.endDonation(record.id);
 
   const { revokeBadges } = await import("./badge-grants.server");
   await revokeBadges(userId, ["supporter"], "subscription", { payment_id: payment["id"] });
