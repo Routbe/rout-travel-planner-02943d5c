@@ -31,8 +31,9 @@ export const Route = createFileRoute("/api_/payment-status")({
         const user = await currentUser().catch(() => null);
         if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
-        const { sql } = await import("@/lib/neon");
-        const rows = (await (paymentId
+        // Owner-scoped read: the member context limits the table to this member's rows (0229).
+        const { sql, withDbContext } = await import("@/lib/neon");
+        const rows = (await withDbContext({ userId: user.id, workspaceId: null }, () => paymentId
           ? sql`
               select id, status, updated_at, created_at
                 from public.verification_payments
@@ -45,7 +46,7 @@ export const Route = createFileRoute("/api_/payment-status")({
                where user_id = ${user.id}
                order by created_at desc
                limit 1
-            `)) as {
+            `)) as unknown as {
           id: string;
           status: string | null;
           updated_at: string | null;

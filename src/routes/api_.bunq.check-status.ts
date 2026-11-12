@@ -39,12 +39,13 @@ export const Route = createFileRoute("/api_/bunq/check-status")({
         const user = await currentUser().catch(() => null);
         if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
-        const { sql } = await import("@/lib/neon");
-        const rows = (await sql`
+        const { sql, withDbContext } = await import("@/lib/neon");
+        // Owner-scoped read: the member context limits the table to this member's rows (0229).
+        const rows = (await withDbContext({ userId: user.id, workspaceId: null }, () => sql`
           select id, user_id, status, provider, provider_ref
             from public.verification_payments
            where id = ${paymentId} limit 1
-        `) as { id: string; user_id: string; status: string; provider: string | null; provider_ref: string | null }[];
+        `)) as unknown as { id: string; user_id: string; status: string; provider: string | null; provider_ref: string | null }[];
         const payment = rows[0];
         if (!payment || payment.user_id !== user.id) {
           return Response.json({ error: "not_found" }, { status: 404 });
