@@ -1,4 +1,4 @@
-import { sql } from "@/lib/neon";
+import { sql, withDbContext } from "@/lib/neon";
 import { authenticateOAuthClient, OAuthError, issuer, sha256Base64Url, signJwt, verifyAccessToken, identityClaims } from "./provider.server";
 
 export async function exchangeRefreshToken(input: { token: string; clientId: string; clientSecret: string | null; ip: string | null; requestedScope?: string | null }) {
@@ -7,6 +7,9 @@ export async function exchangeRefreshToken(input: { token: string; clientId: str
   const rows = await sql`select * from public.rotate_oauth_refresh(${await sha256Base64Url(input.token)},${client.clientId},${await sha256Base64Url(next)})`;
   const row = rows[0];
   if (!row || row["result"] !== "ok") throw new OAuthError("invalid_grant", "Refresh token is ongeldig of hergebruikt.");
+  // The rest acts for this member (owner-scoped claims and tokens); the token
+  // endpoint itself has no session.
+  return withDbContext({ userId: String(row["user_id"]), workspaceId: null }, async () => {
   const now = Math.floor(Date.now()/1000);
   // OIDC: a refresh request may narrow the scope set, never widen it or name
   // scopes outside the whitelist — anything else is invalid_scope (Cluster C).
@@ -40,17 +43,13 @@ export async function exchangeRefreshToken(input: { token: string; clientId: str
   ]);
   if (!batch[1]?.length) throw new OAuthError("invalid_grant", "Refreshfamilie is ingetrokken.");
   return { access_token: token, id_token: idToken, refresh_token: next, token_type: "Bearer", expires_in: ttl, scope: scopes.join(" ") };
+  });
 }
 
 export async function revokeOAuthToken(token: string, clientId: string) {
   const hash = await sha256Base64Url(token);
-  await sql.transaction([
-    sql`update public.oauth_access_tokens set revoked_at=now() where token_hash=${hash} and client_id=${clientId}`,
-    sql`update public.oauth_refresh_tokens set revoked_at=now() where client_id=${clientId}
-      and family_id in(select family_id from public.oauth_refresh_tokens where token_hash=${hash} and client_id=${clientId})`,
-    sql`update public.oauth_access_tokens set revoked_at=now() where client_id=${clientId}
-      and family_id in(select family_id from public.oauth_refresh_tokens where token_hash=${hash} and client_id=${clientId})`,
-  ]);
+  // No member context at the revocation endpoint: one database step (db/0228).
+  await sql`select public.rout_oauth_token_revoke(${hash}, ${clientId})`;
 }
 
 export async function introspectOAuthToken(token: string, clientId: string) {
@@ -58,23 +57,13 @@ export async function introspectOAuthToken(token: string, clientId: string) {
     const verified = await verifyAccessToken(token);
     if (verified.clientId !== clientId) return { active: false };
     // Revoked, expired or consent-withdrawn tokens are never reported active.
-    const rows = await sql`select t.expires_at,t.created_at,t.scopes,t.subject from public.oauth_access_tokens t
-      join public.oauth_clients c on c.client_id=t.client_id join public.users u on u.id=t.user_id
-      join public.oauth_consents g on g.client_id=t.client_id and g.user_id=t.user_id
-      where t.token_hash=${await sha256Base64Url(token)} and t.client_id=${clientId} and t.revoked_at is null and t.expires_at>now()
-        and c.status='active' and not u.is_disabled and u.account_status='active' and g.revoked_at is null
-        and (t.family_id is null or not exists(select 1 from public.oauth_refresh_tokens f where f.family_id=t.family_id and f.revoked_at is not null)) limit 1`;
+    const rows = await sql`select * from public.rout_oauth_access_token_introspect(${await sha256Base64Url(token)}, ${clientId})`;
     const row = rows[0];
     if (!row) return { active: false };
     return { active: true, client_id: clientId, sub: verified.sub, scope: verified.scopes.join(" "), token_type: "Bearer", iss: issuer(),
       exp: Math.floor(new Date(String(row["expires_at"])).getTime()/1000), iat: Math.floor(new Date(String(row["created_at"])).getTime()/1000) };
   } catch {
-    const rows = await sql`select r.user_id,r.scopes,r.expires_at from public.oauth_refresh_tokens r
-      join public.oauth_clients c on c.client_id=r.client_id join public.users u on u.id=r.user_id
-      join public.oauth_consents g on g.client_id=r.client_id and g.user_id=r.user_id
-      where r.token_hash=${await sha256Base64Url(token)} and r.client_id=${clientId} and r.used_at is null and r.revoked_at is null
-        and r.expires_at>now() and c.status='active' and not u.is_disabled and u.account_status='active' and g.revoked_at is null
-        and not exists(select 1 from public.oauth_refresh_tokens f where f.family_id=r.family_id and f.revoked_at is not null) limit 1`;
+    const rows = await sql`select * from public.rout_oauth_refresh_token_introspect(${await sha256Base64Url(token)}, ${clientId})`;
     const row = rows[0];
     if (!row) return { active: false };
     const { scopedSubjectForClientId } = await import("./subject-vault.server");

@@ -48,19 +48,16 @@ export function logOAuthEvent(
   if (!clientId || clientId.length > 100) return;
   void (async () => {
     try {
-      await sql`insert into public.oauth_debug_events (client_id, endpoint, outcome, error_code, detail)
-        values (${clientId}, ${endpoint}, ${outcome}, ${errorCode}, ${JSON.stringify(clean(detail))}::jsonb)`;
-      if (Math.random() < 0.02) await purgeOldDebugEvents();
+      // Append-only through the database, which also trims old rows (db/0228).
+      await sql`select public.rout_oauth_debug_log(${clientId}, ${endpoint}, ${outcome}, ${errorCode}, ${JSON.stringify(clean(detail))}::jsonb)`;
     } catch (error) {
       console.warn("[oauth-debug] log failed", (error as Error).message);
     }
   })();
 }
 
-export async function purgeOldDebugEvents() {
-  await sql`delete from public.oauth_debug_events
-    where created_at < now() - make_interval(days => ${RETENTION_DAYS})`;
-}
+/** Retention (RETENTION_DAYS) is enforced by public.rout_oauth_debug_log itself. */
+export const DEBUG_RETENTION_DAYS = RETENTION_DAYS;
 
 export type DebugEvent = {
   id: string;
@@ -72,11 +69,7 @@ export type DebugEvent = {
 };
 
 export async function listDebugEvents(clientId: string, errorsOnly: boolean): Promise<DebugEvent[]> {
-  const rows = (errorsOnly
-    ? await sql`select * from public.oauth_debug_events where client_id = ${clientId} and outcome = 'error'
-        and created_at > now() - interval '7 days' order by created_at desc limit 100`
-    : await sql`select * from public.oauth_debug_events where client_id = ${clientId}
-        and created_at > now() - interval '7 days' order by created_at desc limit 100`) as Record<string, unknown>[];
+  const rows = (await sql`select * from public.rout_oauth_debug_list(${clientId}, ${errorsOnly})`) as Record<string, unknown>[];
   return rows.map((r) => ({
     id: String(r["id"]),
     endpoint: String(r["endpoint"]),
@@ -90,8 +83,8 @@ export async function listDebugEvents(clientId: string, errorsOnly: boolean): Pr
 /** Recent events across several of the caller's own apps (API activity view). */
 export async function listDebugEventsForClients(clientIds: string[]): Promise<(DebugEvent & { clientId: string })[]> {
   if (!clientIds.length) return [];
-  const rows = (await sql`select * from public.oauth_debug_events where client_id = any(${clientIds})
-      and created_at > now() - interval '7 days' order by created_at desc, id desc limit 50`) as Record<string, unknown>[];
+  // Limited in the database to apps the caller may manage.
+  const rows = (await sql`select * from public.rout_oauth_debug_activity(${clientIds})`) as Record<string, unknown>[];
   return rows.map((r) => ({
     id: String(r["id"]),
     clientId: String(r["client_id"]),

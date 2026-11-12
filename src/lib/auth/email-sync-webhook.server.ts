@@ -66,10 +66,11 @@ export async function deliverEmailUpdated(userId: string, changes: BulkChange[])
   const result = new Map<string, WebhookDelivery>(changes.map((c) => [c.clientId, "none"]));
   if (!changes.length) return result;
   const ids = changes.map((c) => c.clientId);
-  const rows = (await sql`select client_id, backchannel_webhook_url, backchannel_webhook_secret_sealed, backchannel_webhook_secret_iv
-    from public.oauth_clients c where client_id = any(${ids}) and backchannel_webhook_url is not null
-      and exists (select 1 from public.oauth_consents k where k.user_id = ${userId} and k.client_id = c.client_id
-        and k.revoked_at is null and 'email' = any(k.scopes))`) as Record<string, unknown>[];
+  // Apps this member gave the e-mail scope, read for this member (db/0228).
+  const { withDbContext } = await import("@/lib/neon");
+  const rows = ((await withDbContext({ userId, workspaceId: null }, () =>
+    sql`select client_id, url as backchannel_webhook_url, secret_sealed as backchannel_webhook_secret_sealed,
+          secret_iv as backchannel_webhook_secret_iv from public.rout_oauth_email_webhook_targets(${ids})`)) as Record<string, unknown>[]);
   const { getPairwiseSubject } = await import("./oidc-identifiers.server");
   await Promise.all(rows.map(async (r) => {
     const clientId = String(r["client_id"]);

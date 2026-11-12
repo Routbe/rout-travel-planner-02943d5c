@@ -18,7 +18,7 @@ const rows = (await sql`
          case when private_jwk_sealed is not null then 'sealed'
               when private_jwk is not null then 'legacy_plaintext'
               else 'none' end as storage
-    from public.oauth_signing_keys order by created_at
+    from public.rout_oauth_signing_keys_list() order by created_at
 `) as Record<string, unknown>[];
 console.table(rows);
 

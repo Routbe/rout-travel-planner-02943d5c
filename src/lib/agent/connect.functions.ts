@@ -10,11 +10,10 @@ export const getConnectClient = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     try {
       const { sql } = await import("@/lib/neon");
-      const rows = (await sql`
-        select name, logo_url from public.oauth_clients where client_id = ${data.clientId} and status = 'active' limit 1
-      `) as Record<string, unknown>[];
-      const row = rows[0];
-      if (!row) return null;
+      // Public app facts through the database: no member owns this request (db/0228).
+      const rows = (await sql`select public.rout_oauth_client_get(${data.clientId}) as c`) as Record<string, unknown>[];
+      const row = rows[0]?.["c"] as Record<string, unknown> | null | undefined;
+      if (!row || row["status"] !== "active") return null;
       return {
         name: typeof row["name"] === "string" ? row["name"] : null,
         logoUrl: typeof row["logo_url"] === "string" && /^https:\/\//.test(row["logo_url"]) ? row["logo_url"] : null,

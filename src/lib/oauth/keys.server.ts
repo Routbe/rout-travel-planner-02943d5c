@@ -42,12 +42,8 @@ function storageOf(row: KeyRow): KeyStorage {
 }
 
 async function loadKeys(): Promise<LoadedKey[]> {
-  const rows = (await sql`
-    select kid, created_at, retired_at, revoked_at, public_jwk, private_jwk,
-           private_jwk_sealed, private_jwk_iv, kek_fingerprint
-      from public.oauth_signing_keys
-     order by created_at desc
-  `) as KeyRow[];
+  // The app role has no table access to signing keys (db/0228/0230).
+  const rows = (await sql`select * from public.rout_oauth_signing_keys_list()`) as KeyRow[];
   return rows.map((row) => ({
     kid: row.kid,
     createdAt: new Date(row.created_at),
@@ -78,17 +74,9 @@ export async function rotateSigningKey(reason: string): Promise<string> {
   const publicJwk = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as Jwk;
   const publicWithMeta: Jwk = { kty: publicJwk.kty, crv: publicJwk.crv, x: publicJwk.x, y: publicJwk.y, kid, alg: SIGNING_ALG, use: "sig" };
   const sealed = await sealPrivateJwk(kid, { ...privateJwk, kid }, kek);
-  const inserted = (await sql`
-    insert into public.oauth_signing_keys
-      (kid, private_jwk, public_jwk, private_jwk_sealed, private_jwk_iv, kek_fingerprint, alg)
-    values (${kid}, null, ${JSON.stringify(publicWithMeta)}, ${sealed.sealed}, ${sealed.iv}, ${sealed.fingerprint}, ${SIGNING_ALG})
-    returning created_at
-  `) as { created_at: string }[];
-  await sql`
-    update public.oauth_signing_keys
-       set retired_at = now()
-     where retired_at is null and kid <> ${kid} and created_at <= ${inserted[0]!.created_at}
-  `;
+  // Insert (sealed only) and retirement of older keys are one database step.
+  await sql`select public.rout_oauth_signing_key_rotate(${kid}, ${JSON.stringify(publicWithMeta)}::jsonb,
+    ${sealed.sealed}, ${sealed.iv}, ${sealed.fingerprint}, ${SIGNING_ALG})`;
   console.info(`[oidc-keys] rotated signing key (${reason}); new kid ${kid}`);
   cache = null;
   return kid;
@@ -97,13 +85,7 @@ export async function rotateSigningKey(reason: string): Promise<string> {
 /** Wipes private parts of keys retired longer than the grace period (and of revoked keys). */
 export async function wipeRetiredPrivateParts(now = new Date()): Promise<number> {
   const kids = privatePartsToWipe(await loadKeys(), now);
-  for (const kid of kids) {
-    await sql`
-      update public.oauth_signing_keys
-         set private_jwk = null, private_jwk_sealed = null, private_jwk_iv = null
-       where kid = ${kid}
-    `;
-  }
+  if (kids.length) await sql`select public.rout_oauth_signing_keys_wipe(${kids})`;
   return kids.length;
 }
 
@@ -196,11 +178,7 @@ export async function sealLegacyKeys(): Promise<{ rotated: boolean; wiped: numbe
     rotated = true;
   }
   for (const k of legacy) {
-    await sql`
-      update public.oauth_signing_keys
-         set private_jwk = null, retired_at = coalesce(retired_at, now())
-       where kid = ${k.kid}
-    `;
+    await sql`select public.rout_oauth_signing_key_retire_legacy(${k.kid})`;
   }
   return { rotated, wiped: legacy.length };
 }
