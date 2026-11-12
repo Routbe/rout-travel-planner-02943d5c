@@ -11241,6 +11241,14 @@
           "default": "now()",
           "identity": null,
           "generated": null
+        },
+        {
+          "name": "attempts",
+          "type": "integer",
+          "notNull": true,
+          "default": "0",
+          "identity": null,
+          "generated": null
         }
       ],
       "constraints": [
@@ -28266,6 +28274,24 @@
     },
     {
       "schema": "public",
+      "name": "rout_altcha_purge",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_altcha_purge()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare n int;\nbegin\n  delete from public.altcha_used where expires_at < pg_catalog.now();\n  get diagnostics n = row_count;\n  return n;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_altcha_store_ready",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_altcha_store_ready()\n RETURNS boolean\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  perform 1 from public.altcha_used limit 1;\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_altcha_verify_and_burn",
+      "args": "p_signature text, p_expires_at timestamp with time zone",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_altcha_verify_and_burn(p_signature text, p_expires_at timestamp with time zone)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v text;\nbegin\n  if p_signature is null or p_signature !~ '^[0-9a-f]{64}$' or p_expires_at is null then return 'invalid'; end if;\n  if p_expires_at <= pg_catalog.now() then return 'expired'; end if;\n  if p_expires_at > pg_catalog.now() + interval '1 day' then return 'invalid'; end if;\n  insert into public.altcha_used (signature, expires_at) values (p_signature, p_expires_at)\n  on conflict (signature) do nothing\n  returning signature into v;\n  return case when v is null then 'replayed' else 'ok' end;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_any_admin",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_any_admin()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (select 1 from public.user_roles r where r.role::text = 'admin')\n$function$"
@@ -28695,6 +28721,18 @@
       "name": "rout_like_literal",
       "args": "p text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_like_literal(p text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n  select '%' || replace(replace(replace(p, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%'\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_mastodon_app_get",
+      "args": "p_instance text, p_redirect_uri text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_mastodon_app_get(p_instance text, p_redirect_uri text)\n RETURNS TABLE(client_id text, client_secret text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select r.client_id, r.client_secret from public.mastodon_app_registrations r\n   where r.instance = p_instance and r.redirect_uri = p_redirect_uri limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_mastodon_app_put",
+      "args": "p_instance text, p_redirect_uri text, p_client_id text, p_client_secret text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_mastodon_app_put(p_instance text, p_redirect_uri text, p_client_id text, p_client_secret text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_instance is null or p_instance !~ '^[a-z0-9.-]{1,253}$' or p_redirect_uri is null or pg_catalog.length(p_redirect_uri) not between 8 and 2000\n     or p_redirect_uri !~ '^https?://' or coalesce(pg_catalog.length(p_client_id), 0) not between 1 and 500\n     or coalesce(pg_catalog.length(p_client_secret), 0) not between 1 and 500 then\n    raise exception 'invalid registration' using errcode = '22023';\n  end if;\n  insert into public.mastodon_app_registrations (instance, redirect_uri, client_id, client_secret)\n  values (p_instance, p_redirect_uri, p_client_id, p_client_secret)\n  on conflict (instance, redirect_uri) do nothing;\n  return found;\nend $function$"
     },
     {
       "schema": "public",
@@ -29244,6 +29282,18 @@
     },
     {
       "schema": "public",
+      "name": "rout_rate_limit_check_and_increment",
+      "args": "p_bucket text, p_window_sec integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_rate_limit_check_and_increment(p_bucket text, p_window_sec integer)\n RETURNS TABLE(hits integer, prev integer, now_ms bigint)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare\n  v_now timestamptz := pg_catalog.now();\n  v_start timestamptz;\n  v_hits int;\n  v_prev int;\nbegin\n  if p_bucket is null or p_bucket !~ '^[^[:space:]]{1,200}$' or p_window_sec is null or p_window_sec not between 1 and 604800 then\n    raise exception 'invalid rate limit' using errcode = '22023';\n  end if;\n  v_start := pg_catalog.to_timestamp(pg_catalog.floor(extract(epoch from v_now) / p_window_sec) * p_window_sec);\n  insert into public.rate_limits as r (bucket, window_start, hits) values (p_bucket, v_start, 1)\n  on conflict (bucket, window_start) do update set hits = r.hits + 1\n  returning r.hits into v_hits;\n  select r.hits into v_prev from public.rate_limits r\n   where r.bucket = p_bucket and r.window_start = v_start - pg_catalog.make_interval(secs => p_window_sec);\n  delete from public.rate_limits r\n   where r.bucket = p_bucket and r.window_start < v_start - pg_catalog.make_interval(secs => p_window_sec);\n  if pg_catalog.random() < 0.02 then\n    delete from public.rate_limits r\n     where r.ctid = any (array(select x.ctid from public.rate_limits x\n                                where x.window_start < v_now - interval '1 day' limit 500));\n  end if;\n  hits := v_hits;\n  prev := coalesce(v_prev, 0);\n  now_ms := (extract(epoch from v_now) * 1000)::bigint;\n  return next;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_rate_limit_peek",
+      "args": "p_bucket text, p_since_sec integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_rate_limit_peek(p_bucket text, p_since_sec integer)\n RETURNS integer\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v int;\nbegin\n  if p_bucket is null or p_bucket !~ '^[^[:space:]]{1,200}$' or p_since_sec is null or p_since_sec not between 1 and 604800 then\n    raise exception 'invalid rate limit' using errcode = '22023';\n  end if;\n  select coalesce(sum(r.hits), 0)::int into v from public.rate_limits r\n   where r.bucket = p_bucket and r.window_start > pg_catalog.now() - pg_catalog.make_interval(secs => p_since_sec);\n  return v;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_record_signup_age",
       "args": "p_email text, p_dob date, p_parent_email text, p_token_hash text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_record_signup_age(p_email text, p_dob date, p_parent_email text, p_token_hash text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare v_id uuid; v_minor boolean;\nbegin\n  select id into v_id from public.users\n   where lower(email) = lower(p_email) and date_of_birth is null and created_at > now() - interval '15 minutes'\n   limit 1;\n  if v_id is null then return null; end if;\n  v_minor := p_dob > (current_date - interval '16 years');\n  update public.users\n     set date_of_birth = p_dob,\n         parent_email = case when v_minor then lower(p_parent_email) else null end,\n         parent_consent_status = case when v_minor then 'pending'::public.parent_consent_status else 'none' end\n   where id = v_id;\n  if v_minor and p_token_hash is not null then\n    insert into public.parent_authorizations (user_id, token, action_type, expires_at)\n    values (v_id, p_token_hash, 'consent', now() + interval '30 days');\n  end if;\n  return v_id;\nend $function$"
@@ -29346,6 +29396,24 @@
     },
     {
       "schema": "public",
+      "name": "rout_signin_throttle_failures",
+      "args": "p_identity_hash text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_signin_throttle_failures(p_identity_hash text)\n RETURNS integer\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select coalesce((select t.failures from public.signin_throttle t\n                    where t.identity_hash = p_identity_hash\n                      and t.window_started_at > pg_catalog.now() - interval '15 minutes'), 0)\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_stateless_otp_issue",
+      "args": "p_kind text, p_key text, p_code_hash text, p_payload text, p_ttl_sec integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_stateless_otp_issue(p_kind text, p_key text, p_code_hash text, p_payload text, p_ttl_sec integer)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_lock timestamptz;\nbegin\n  if p_key is null or p_key !~ '^[0-9a-f]{64}$' or p_code_hash is null or p_code_hash !~ '^[0-9a-f]{64}$'\n     or p_payload is null or pg_catalog.length(p_payload) not between 1 and 4000 then\n    raise exception 'invalid code' using errcode = '22023';\n  end if;\n  if p_kind = 'login_code' then\n    if p_ttl_sec is null or p_ttl_sec not between 60 and 900 then raise exception 'invalid code' using errcode = '22023'; end if;\n    delete from public.login_codes where email_hash = p_key or expires_at < pg_catalog.now();\n    insert into public.login_codes (email_hash, code_hash, link, expires_at, attempts)\n    values (p_key, p_code_hash, p_payload, pg_catalog.now() + pg_catalog.make_interval(secs => p_ttl_sec), 0);\n    return 'issued';\n  elsif p_kind = 'fediverse' then\n    if p_ttl_sec is null or p_ttl_sec not between 60 and 600 then raise exception 'invalid code' using errcode = '22023'; end if;\n    select o.locked_until into v_lock from public.fediverse_email_otp o where o.pending_key = p_key for update;\n    if v_lock is not null and v_lock > pg_catalog.now() then return 'locked'; end if;\n    insert into public.fediverse_email_otp as o (pending_key, email, code_hash, attempts, locked_until, expires_at)\n    values (p_key, p_payload, p_code_hash, 0, null, pg_catalog.now() + pg_catalog.make_interval(secs => p_ttl_sec))\n    on conflict (pending_key) do update\n      set email = excluded.email, code_hash = excluded.code_hash, attempts = 0, locked_until = null,\n          expires_at = excluded.expires_at, created_at = pg_catalog.now();\n    return 'issued';\n  end if;\n  raise exception 'unknown code kind' using errcode = '22023';\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_stateless_otp_verify",
+      "args": "p_kind text, p_key text, p_code text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_stateless_otp_verify(p_kind text, p_key text, p_code text)\n RETURNS TABLE(outcome text, payload text, attempts_left integer)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare\n  f public.fediverse_email_otp;\n  l public.login_codes;\n  v_hash text;\n  v_attempts int;\nbegin\n  if p_key is null or p_key !~ '^[0-9a-f]{64}$' then\n    outcome := 'missing'; return next; return;\n  end if;\n  if p_code is null or p_code !~ '^[0-9]{6}$' then\n    outcome := 'wrong'; return next; return;\n  end if;\n  if p_kind = 'login_code' then\n    v_hash := pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p_key || ':' || p_code, 'UTF8')), 'hex');\n    delete from public.login_codes c\n     where c.email_hash = p_key and c.code_hash = v_hash and c.expires_at > pg_catalog.now() and c.attempts < 5\n    returning * into l;\n    if l.id is not null then\n      outcome := 'ok'; payload := l.link; return next; return;\n    end if;\n    update public.login_codes c set attempts = c.attempts + 1\n     where c.email_hash = p_key and c.expires_at > pg_catalog.now()\n    returning c.attempts into v_attempts;\n    if v_attempts is null then outcome := 'missing'; return next; return; end if;\n    if v_attempts >= 5 then\n      delete from public.login_codes c where c.email_hash = p_key;\n      outcome := 'locked'; attempts_left := 0; return next; return;\n    end if;\n    outcome := 'wrong'; attempts_left := 5 - v_attempts; return next; return;\n  elsif p_kind = 'fediverse' then\n    select * into f from public.fediverse_email_otp o where o.pending_key = p_key for update;\n    if not found then outcome := 'missing'; return next; return; end if;\n    if f.locked_until is not null and f.locked_until > pg_catalog.now() then\n      outcome := 'locked'; attempts_left := 0; return next; return;\n    end if;\n    if f.expires_at < pg_catalog.now() then outcome := 'expired'; return next; return; end if;\n    v_hash := pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p_key || '|' || f.email || '|' || p_code, 'UTF8')), 'hex');\n    if v_hash = f.code_hash then\n      delete from public.fediverse_email_otp o where o.pending_key = p_key;\n      outcome := 'ok'; payload := f.email; return next; return;\n    end if;\n    v_attempts := f.attempts + 1;\n    update public.fediverse_email_otp o\n       set attempts = v_attempts,\n           locked_until = case when v_attempts >= 3 then pg_catalog.now() + interval '15 minutes' else null end\n     where o.pending_key = p_key;\n    outcome := case when v_attempts >= 3 then 'locked' else 'wrong' end;\n    attempts_left := greatest(3 - v_attempts, 0);\n    return next; return;\n  end if;\n  raise exception 'unknown code kind' using errcode = '22023';\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_subscriber_confirm",
       "args": "p_token_hash text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_subscriber_confirm(p_token_hash text)\n RETURNS TABLE(id uuid, owner_user_id uuid, space text, handle text, email_ciphertext text, email_iv text, list_id integer)\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  update public.profile_subscribers s\n     set status = 'confirmed', confirmed_at = now(), confirm_token_hash = null, updated_at = now()\n   where s.confirm_token_hash = p_token_hash and s.status = 'pending'\n     and s.updated_at > now() - interval '7 days'\n  returning s.id, s.owner_user_id, s.space, s.handle, s.email_ciphertext, s.email_iv, s.brevo_list_id;\n$function$"
@@ -29373,6 +29441,24 @@
       "name": "rout_subscriber_unsubscribe",
       "args": "p_token_hash text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_subscriber_unsubscribe(p_token_hash text)\n RETURNS boolean\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  with done as (\n    update public.profile_subscribers s\n       set status = 'unsubscribed', unsubscribed_at = now(), confirm_token_hash = null,\n           email_ciphertext = '', email_iv = '', updated_at = now()\n     where s.unsubscribe_token_hash = p_token_hash and s.status <> 'unsubscribed'\n    returning 1\n  ) select exists (select 1 from done);\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_telegram_contact_forget",
+      "args": "p_chat_id bigint",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_telegram_contact_forget(p_chat_id bigint)\n RETURNS void\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  delete from public.telegram_verify_sessions where chat_id = p_chat_id\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_telegram_contact_get",
+      "args": "p_chat_id bigint",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_telegram_contact_get(p_chat_id bigint)\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select s.phone_enc from public.telegram_verify_sessions s\n   where s.chat_id = p_chat_id and s.expires_at > pg_catalog.now() limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_telegram_contact_remember",
+      "args": "p_chat_id bigint, p_phone_enc text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_telegram_contact_remember(p_chat_id bigint, p_phone_enc text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_chat_id is null or p_phone_enc is null or pg_catalog.length(p_phone_enc) not between 1 and 2000 then\n    raise exception 'invalid contact' using errcode = '22023';\n  end if;\n  insert into public.telegram_verify_sessions (chat_id, phone_enc, expires_at)\n  values (p_chat_id, p_phone_enc, pg_catalog.now() + interval '15 minutes')\n  on conflict (chat_id) do update set phone_enc = excluded.phone_enc, expires_at = excluded.expires_at;\n  delete from public.telegram_verify_sessions where expires_at < pg_catalog.now() - interval '1 hour';\nend $function$"
     },
     {
       "schema": "public",

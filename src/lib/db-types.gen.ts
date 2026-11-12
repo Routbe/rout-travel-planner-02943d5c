@@ -1068,6 +1068,7 @@ export interface PublicLoginCodesRow {
   "link": string;
   "expires_at": string | Date;
   "created_at": string | Date;
+  "attempts": number;
 }
 
 export interface PublicMastodonAppRegistrationsRow {
