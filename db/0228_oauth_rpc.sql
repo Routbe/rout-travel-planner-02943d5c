@@ -518,6 +518,25 @@ begin
     using (public.rout_purge_due(user_id));
 end $$;
 
+-- ------------------------------------------------------------------ repair: account purge after 0227
+-- A DELETE ... WHERE col = $1 also needs to read col. After 0227 the purge could
+-- not read admin_bootstrap_tokens.consumed_by (permission denied, so the whole
+-- purge transaction failed) nor see user_roles / admin_permissions rows. Grant
+-- exactly that read, only while that member's deletion is due.
+do $$
+begin
+  grant select (consumed_by) on table public.admin_bootstrap_tokens to rout_app;
+  drop policy if exists rout_owner_purge_read on public.admin_bootstrap_tokens;
+  create policy rout_owner_purge_read on public.admin_bootstrap_tokens for select to rout_app
+    using (public.rout_purge_due(consumed_by));
+  drop policy if exists rout_owner_purge_read on public.user_roles;
+  create policy rout_owner_purge_read on public.user_roles for select to rout_app
+    using (public.rout_purge_due(user_id));
+  drop policy if exists rout_owner_purge_read on public.admin_permissions;
+  create policy rout_owner_purge_read on public.admin_permissions for select to rout_app
+    using (public.rout_purge_due(user_id));
+end $$;
+
 -- ------------------------------------------------------------------ privileges
 do $$
 declare f text;
