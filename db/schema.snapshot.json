@@ -3315,6 +3315,46 @@
       "forceRls": false,
       "policies": [
         {
+          "name": "api_keys_owner_delete",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "(user_id = rout_current_user_id())",
+          "check": null
+        },
+        {
+          "name": "api_keys_owner_insert",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "INSERT",
+          "using": null,
+          "check": "((user_id = rout_current_user_id()) AND ((workspace_id IS NULL) OR rout_is_workspace_member(workspace_id)))"
+        },
+        {
+          "name": "api_keys_owner_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "(user_id = rout_current_user_id())",
+          "check": null
+        },
+        {
+          "name": "api_keys_owner_update",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "UPDATE",
+          "using": "(user_id = rout_current_user_id())",
+          "check": "(user_id = rout_current_user_id())"
+        },
+        {
           "name": "atomic_merge_executor",
           "permissive": true,
           "roles": [
@@ -4979,6 +5019,16 @@
       "rls": true,
       "forceRls": false,
       "policies": [
+        {
+          "name": "badges_public_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "true",
+          "check": null
+        },
         {
           "name": "rout_server",
           "permissive": true,
@@ -19328,6 +19378,16 @@
       "forceRls": false,
       "policies": [
         {
+          "name": "reserved_handles_public_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "true",
+          "check": null
+        },
+        {
           "name": "rout_server",
           "permissive": true,
           "roles": [
@@ -28100,7 +28160,7 @@
       "schema": "public",
       "name": "grant_early_verified_promo",
       "args": "",
-      "def": "CREATE OR REPLACE FUNCTION public.grant_early_verified_promo()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.verified and not coalesce(old.verified, false) then\n    new.is_early_verified := true;\n    insert into public.entitlement_overrides (scope_type, scope_id, entitlement_key, value, granted_by)\n    values ('user', new.id, 'PRO_FOR_LIFE', 'true', 'early_verified_promo'),\n           ('user', new.id, 'INCLUDED_PLUS_WORKSPACE', '1', 'early_verified_promo')\n    on conflict (scope_type, scope_id, entitlement_key) do nothing;\n  end if;\n  return new;\nend $function$"
+      "def": "CREATE OR REPLACE FUNCTION public.grant_early_verified_promo()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if new.verified and not coalesce(old.verified, false) then\n    new.is_early_verified := true;\n    insert into public.entitlement_overrides (scope_type, scope_id, entitlement_key, value, granted_by)\n    values ('user', new.id, 'PRO_FOR_LIFE', 'true', 'early_verified_promo'),\n           ('user', new.id, 'INCLUDED_PLUS_WORKSPACE', '1', 'early_verified_promo')\n    on conflict (scope_type, scope_id, entitlement_key) do nothing;\n  end if;\n  return new;\nend $function$"
     },
     {
       "schema": "public",
@@ -28686,9 +28746,45 @@
     },
     {
       "schema": "public",
+      "name": "rout_didit_usage_bump",
+      "args": "p_limit integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_didit_usage_bump(p_limit integer)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare m date := pg_catalog.date_trunc('month', pg_catalog.now() at time zone 'UTC')::date; v int;\nbegin\n  if p_limit is null or p_limit not between 1 and 100000 then raise exception 'invalid limit' using errcode = '22023'; end if;\n  insert into public.didit_monthly_usage as u (month, success_count) values (m, 1)\n  on conflict (month) do update set success_count = u.success_count + 1 where u.success_count < p_limit\n  returning u.success_count into v;\n  return v is not null;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_didit_usage_count",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_didit_usage_count()\n RETURNS integer\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select coalesce((select u.success_count from public.didit_monthly_usage u\n                    where u.month = pg_catalog.date_trunc('month', pg_catalog.now() at time zone 'UTC')::date), 0)\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_didit_usage_release",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_didit_usage_release()\n RETURNS void\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  update public.didit_monthly_usage set success_count = greatest(success_count - 1, 0)\n   where month = pg_catalog.date_trunc('month', pg_catalog.now() at time zone 'UTC')::date\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_due_sunset_accounts",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_due_sunset_accounts()\n RETURNS TABLE(id uuid, ba text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$ select u.id, u.user_metadata->>'neon_auth_id' from public.users u\n        where u.account_status = 'migrated_sunset' and u.sunset_at < now() limit 200 $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_entitlement_grant_early_verified",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_entitlement_grant_early_verified(p_user uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not exists (select 1 from public.profiles p where p.id = p_user and p.verified) then return false; end if;\n  insert into public.entitlement_overrides (scope_type, scope_id, entitlement_key, value, granted_by)\n  values ('user', p_user, 'PRO_FOR_LIFE', 'true', 'early_verified_promo'),\n         ('user', p_user, 'INCLUDED_PLUS_WORKSPACE', '1', 'early_verified_promo')\n  on conflict (scope_type, scope_id, entitlement_key) do nothing;\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_entitlement_overrides",
+      "args": "p_scope_type text, p_scope_id uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_entitlement_overrides(p_scope_type text, p_scope_id uuid)\n RETURNS TABLE(entitlement_key text, value text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select o.entitlement_key, o.value from public.entitlement_overrides o\n   where o.scope_type = p_scope_type and o.scope_id = p_scope_id\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_entitlement_redeem_plus",
+      "args": "p_user uuid, p_workspace uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_entitlement_redeem_plus(p_user uuid, p_workspace uuid)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid;\nbegin\n  if not exists (select 1 from public.workspace_members m\n                  where m.workspace_id = p_workspace and m.user_id = p_user and m.role = 'owner') then\n    return 'forbidden';\n  end if;\n  update public.entitlement_overrides o\n     set value = ((case when o.value ~ '^[0-9]{1,6}$' then o.value::int else 0 end) - 1)::text\n   where o.scope_type = 'user' and o.scope_id = p_user and o.entitlement_key = 'INCLUDED_PLUS_WORKSPACE'\n     and (case when o.value ~ '^[0-9]{1,6}$' then o.value::int else 0 end) > 0\n  returning o.id into v;\n  if v is null then return 'no_credit'; end if;\n  insert into public.entitlement_overrides (scope_type, scope_id, entitlement_key, value, granted_by)\n  values ('workspace', p_workspace, 'WORKSPACE_PLAN', 'plus', 'user:' || p_user::text)\n  on conflict (scope_type, scope_id, entitlement_key) do update set value = 'plus';\n  return 'ok';\nend $function$"
     },
     {
       "schema": "public",
@@ -28788,6 +28884,24 @@
     },
     {
       "schema": "public",
+      "name": "rout_identity_account_visible",
+      "args": "p_account text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_identity_account_visible(p_account text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select public.rout_caller_is_admin() or exists (\n    select 1 from neon_auth.account a join public.users u on u.auth_user_id = a.\"userId\" or u.id = a.\"userId\"\n     where a.id::text = p_account and u.id = public.rout_current_user_id())\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_identity_label_put",
+      "args": "p_account text, p_provider text, p_label text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_identity_label_put(p_account text, p_provider text, p_label text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_account is null or pg_catalog.length(p_account) > 80 or p_provider is null or p_provider !~ '^[A-Za-z0-9_.:-]{1,40}$'\n     or p_label is null or pg_catalog.length(p_label) not between 1 and 200 then\n    raise exception 'invalid label' using errcode = '22023';\n  end if;\n  if not public.rout_identity_account_visible(p_account) then return false; end if;\n  insert into public.identity_labels (account_id, provider, label) values (p_account, p_provider, p_label)\n  on conflict (account_id) do update set label = excluded.label, updated_at = pg_catalog.now();\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_identity_labels_get",
+      "args": "p_ids text[]",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_identity_labels_get(p_ids text[])\n RETURNS TABLE(account_id text, label text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select l.account_id, l.label from public.identity_labels l\n   where pg_catalog.cardinality(p_ids) <= 50 and l.account_id = any (p_ids)\n     and public.rout_identity_account_visible(l.account_id)\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_ingest_token_owner",
       "args": "p_hash text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_ingest_token_owner(p_hash text)\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  select user_id from public.omni_ingest_tokens where token_hash = p_hash\n$function$"
@@ -28827,6 +28941,24 @@
       "name": "rout_merge_assert",
       "args": "ok boolean, reason text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_merge_assert(ok boolean, reason text)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'public'\nAS $function$\nbegin\n  if not coalesce(ok, false) then\n    raise exception '%', reason using errcode = 'P0001';\n  end if;\n  return true;\nend\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_merge_ticket_bind",
+      "args": "p_ticket uuid, p_secondary uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_merge_ticket_bind(p_ticket uuid, p_secondary uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  update public.account_merge_tickets t set preview_user_id = p_secondary\n   where t.id = p_ticket and t.used_at is null and t.expires_at > pg_catalog.now() and t.primary_user_id <> p_secondary\n     and (t.preview_user_id is null or t.preview_user_id = p_secondary);\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_merge_ticket_create",
+      "args": "p_primary uuid, p_pin_hash text, p_token_hash text, p_ttl_minutes integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_merge_ticket_create(p_primary uuid, p_pin_hash text, p_token_hash text, p_ttl_minutes integer)\n RETURNS TABLE(id uuid, expires_at timestamp with time zone)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_primary is null or p_pin_hash !~ '^[A-Za-z0-9+/]{43}=$' or p_token_hash !~ '^[A-Za-z0-9+/]{43}=$'\n     or p_pin_hash = p_token_hash or p_ttl_minutes is null or p_ttl_minutes not between 1 and 60 then\n    raise exception 'invalid ticket' using errcode = '22023';\n  end if;\n  update public.account_merge_tickets t set used_at = pg_catalog.now() where t.primary_user_id = p_primary and t.used_at is null;\n  return query\n    insert into public.account_merge_tickets as t (primary_user_id, pin_hash, token_hash, expires_at)\n    values (p_primary, p_pin_hash, p_token_hash, pg_catalog.now() + pg_catalog.make_interval(mins => p_ttl_minutes))\n    returning t.id, t.expires_at;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_merge_ticket_find",
+      "args": "p_hash text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_merge_ticket_find(p_hash text)\n RETURNS TABLE(id uuid, primary_user_id uuid, preview_user_id uuid, expires_at timestamp with time zone)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select t.id, t.primary_user_id, t.preview_user_id, t.expires_at from public.account_merge_tickets t\n   where p_hash ~ '^[A-Za-z0-9+/]{43}=$' and t.used_at is null and t.expires_at > pg_catalog.now()\n     and (t.pin_hash = p_hash or t.token_hash = p_hash)\n   order by t.created_at desc limit 1\n$function$"
     },
     {
       "schema": "public",
@@ -29436,6 +29568,24 @@
     },
     {
       "schema": "public",
+      "name": "rout_referral_claim",
+      "args": "p_inviter uuid, p_invitee uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_referral_claim(p_inviter uuid, p_invitee uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid;\nbegin\n  if p_inviter is null or p_invitee is null or p_inviter = p_invitee then return false; end if;\n  if not exists (select 1 from public.users u where u.id = p_invitee and u.created_at > pg_catalog.now() - interval '24 hours') then\n    return false;\n  end if;\n  insert into public.referrals (inviter_id, invitee_id) values (p_inviter, p_invitee)\n  on conflict (invitee_id) do nothing returning id into v;\n  return v is not null;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_referral_counts",
+      "args": "p_inviter uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_referral_counts(p_inviter uuid)\n RETURNS TABLE(invited integer, verified_invites integer)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select pg_catalog.count(*)::int, (pg_catalog.count(*) filter (where r.verified))::int\n    from public.referrals r where r.inviter_id = p_inviter\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_referral_mark_verified",
+      "args": "p_invitee uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_referral_mark_verified(p_invitee uuid)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid;\nbegin\n  update public.referrals set verified = true, verified_at = pg_catalog.now()\n   where invitee_id = p_invitee and not verified\n  returning inviter_id into v;\n  return v;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_require_admin",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_require_admin()\n RETURNS uuid\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid := public.rout_current_user_id();\nbegin\n  if v is null or not public.rout_has_role(v, 'admin') then\n    raise exception 'admin required' using errcode = '42501';\n  end if;\n  return v;\nend $function$"
@@ -29721,6 +29871,12 @@
       "name": "rout_workspace_atproto_did",
       "args": "p_slug text, p_domain text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_workspace_atproto_did(p_slug text, p_domain text)\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select w.bluesky_did from public.workspaces w\n   where (p_slug is not null and w.slug = lower(p_slug))\n      or (p_domain is not null and w.domain_verified_at is not null and lower(w.domain) = lower(p_domain))\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_workspace_owner_pro_for_life",
+      "args": "p_workspace uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_workspace_owner_pro_for_life(p_workspace uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (select 1 from public.workspace_members m\n                   join public.entitlement_overrides o on o.scope_type = 'user' and o.scope_id = m.user_id\n                    and o.entitlement_key = 'PRO_FOR_LIFE' and o.value = 'true'\n                  where m.workspace_id = p_workspace and m.role = 'owner')\n$function$"
     },
     {
       "schema": "public",
