@@ -393,7 +393,8 @@ async function activate(
     kind: "verification_activated",
     severity: "info",
     message: `Payment auto-verified from bank e-mail (${reference}).`,
-    details: { payment_id: payment.id, reference, level: 1, amount_cents: amountCents },});
+    details: { payment_id: payment.id, reference, level: 1, amount_cents: amountCents },
+  }).catch((error) => console.error("[security-event] write failed", error));
 
   console.info("[sepa-match] level 1 activated", { paymentId: payment.id, reference });
 
