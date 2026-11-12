@@ -37,12 +37,10 @@ async function salted(value: string | null | undefined): Promise<string | null> 
 /** Records an event; never throws (auditing must not block the action it records). */
 export async function recordSecurityEvent(e: SecurityEvent): Promise<void> {
   try {
+    // The database computes the hash chain; the table itself is closed to the app (db/0234).
     await sql`
-      insert into public.security_audit_logs
-        (event_type, user_id, actor_id, ip_hash, user_agent_hash, payload_json, prev_hash, current_hash)
-      values (${e.eventType}, ${e.userId ?? null}, ${e.actorId ?? e.userId ?? null},
-              ${await salted(e.ip)}, ${await salted(e.userAgent)},
-              ${JSON.stringify(e.payload ?? {})}::jsonb, '', '')`;
+      select public.rout_audit_write(${e.eventType}, ${e.userId ?? null}, ${e.actorId ?? e.userId ?? null},
+        ${await salted(e.ip)}, ${await salted(e.userAgent)}, ${JSON.stringify(e.payload ?? {})}::jsonb)`;
   } catch (err) {
     console.warn("[audit] write failed", { eventType: e.eventType, error: (err as Error).message });
   }
@@ -53,10 +51,7 @@ export async function createDailyCheckpoint(day: string) {
   const secret = process.env["ROUT_AUDIT_SIGNING_SECRET"];
   if (!secret) throw new Error("ROUT_AUDIT_SIGNING_SECRET missing");
   const rows = (await sql`
-    select id, current_hash, (select count(*) from public.security_audit_logs
-      where created_at < (${day}::date + 1)) as n
-    from public.security_audit_logs where created_at < (${day}::date + 1)
-    order by id desc limit 1`) as { id: string; current_hash: string; n: string }[];
+    select id, current_hash, n from public.rout_audit_head(${day}::date)`) as { id: string; current_hash: string; n: string }[];
   const head = rows[0];
   const cp = {
     day,
@@ -75,15 +70,10 @@ export async function createDailyCheckpoint(day: string) {
 
 /** Removes rows older than the retention window; checkpoints are kept forever. */
 export async function purgeExpiredAuditRows(): Promise<number> {
-  const [, res] = await runBatch(
-    [
-      { query: "select set_config('rout.audit_retention', 'on', true)", params: [] },
-      {
-        query: `delete from public.security_audit_logs where created_at < now() - ($1 || ' days')::interval`,
-        params: [String(AUDIT_RETENTION_DAYS)],
-      },
-    ],
+  // The window is fixed in the database at AUDIT_RETENTION_DAYS (365); the trigger re-checks it.
+  const [res] = await runBatch(
+    [{ query: "select public.rout_audit_purge_expired() as n", params: [] }],
     { withContext: false },
   );
-  return res?.rowCount ?? 0;
+  return Number(res?.rows[0]?.["n"] ?? 0);
 }

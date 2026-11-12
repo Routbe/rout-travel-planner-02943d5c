@@ -49,17 +49,12 @@ function expectedCents(payment: PaymentRow): number {
  */
 async function recordInboundEvent(reference: string | null): Promise<void> {
   try {
-    const { dbAdmin } = await import("@/lib/db/admin.server");
+    const { sql } = await import("@/lib/neon");
     const id = reference
       ? `inbound:${reference}`
       : `inbound:UNMATCHED-${Date.now().toString(36).toUpperCase()}`;
-    const { error } = await dbAdmin.from("webhook_events").insert({
-      id,
-      source: "banking",
-      kind: "payment_email",
-    });
-    // 23505 = same reference already logged; the queue only needs one row.
-    if (error && error.code !== "23505") console.error("[sepa-match] event log failed", error);
+    // The same reference logged twice keeps one row (the function ignores the repeat).
+    await sql`select public.rout_webhook_event_record(${id}, 'banking', 'payment_email', 'inbound', null, 'processing')`;
   } catch (error) {
     console.error("[sepa-match] event log threw", error);
   }

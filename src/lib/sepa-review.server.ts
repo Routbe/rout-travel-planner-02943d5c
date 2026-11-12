@@ -49,22 +49,12 @@ export interface QueueInput {
  */
 export async function queueSepaReview(input: QueueInput): Promise<string | null> {
   try {
+    // Bank webhooks carry no member session: the queue is written by a narrow function (db/0234).
     const rows = (await sql`
-      insert into public.sepa_review_queue
-        (payment_id, user_id, reason, reference, amount_cents, expected_cents,
-         payer_name, holder_name, match_score, notes)
-      values (${input.paymentId}, ${input.userId}, ${input.reason ?? "name_mismatch"},
-              ${input.reference}, ${input.amountCents}, ${input.expectedCents},
-              ${input.payerName}, ${input.holderName}, ${input.matchScore},
-              ${input.notes ?? null})
-      on conflict (payment_id) where status = 'open' and payment_id is not null
-      do update set
-        reference = coalesce(excluded.reference, public.sepa_review_queue.reference),
-        amount_cents = excluded.amount_cents,
-        payer_name = coalesce(excluded.payer_name, public.sepa_review_queue.payer_name),
-        match_score = excluded.match_score
-      returning id
-    `) as Array<{ id: string }>;
+      select public.rout_sepa_review_queue(${input.paymentId}::uuid, ${input.userId}::uuid,
+        ${input.reason ?? "name_mismatch"}, ${input.reference}, ${input.amountCents}::int, ${input.expectedCents}::int,
+        ${input.payerName}, ${input.holderName}, ${input.matchScore}::numeric, ${input.notes ?? null}) as id
+    `) as Array<{ id: string | null }>;
     return rows[0]?.id ?? null;
   } catch (error) {
     console.error("[sepa-review] queue insert failed", error);
