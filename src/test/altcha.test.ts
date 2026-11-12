@@ -10,16 +10,16 @@ vi.mock("@/lib/neon", () => ({
       state.ddlCalls += 1;
       return Promise.reject(new Error("DDL forbidden for rout_app"));
     }
-    if (q.includes("insert into public.altcha_used")) {
+    if (q.includes("rout_altcha_verify_and_burn")) {
       if (state.unavailable) return Promise.reject(new Error("replay store unavailable"));
       if (state.failNextInsert) {
         state.failNextInsert = false;
         return Promise.reject(new Error("transient gateway blip"));
       }
       const sig = values[0] as string;
-      if (used.has(sig)) return Promise.resolve([]);
+      if (used.has(sig)) return Promise.resolve([{ r: "replayed" }]);
       used.add(sig);
-      return Promise.resolve([{ signature: sig }]);
+      return Promise.resolve([{ r: "ok" }]);
     }
     return Promise.resolve([]);
   },

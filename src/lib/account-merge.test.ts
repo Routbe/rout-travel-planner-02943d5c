@@ -24,10 +24,6 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/neon", () => {
   const run = (query: string): unknown[] => {
     if (/^\s*(update|delete|insert)/i.test(query)) state.sqlWrites.push(query);
-    if (query.includes("from public.rate_limits")) {
-      if (state.failures instanceof Error) throw state.failures;
-      return [{ hits: state.failures }];
-    }
     if (query.includes("from public.account_merge_tickets")) return state.ticket ? [state.ticket] : [];
     if (query.includes("from public.profiles where id in")) return [{ id: P, username: "a" }, { id: S, username: "b" }];
     if (query.includes("from public.users")) return [];
@@ -50,7 +46,14 @@ vi.mock("@/lib/neon", () => {
   };
 });
 vi.mock("./security-code.server", () => ({ consumeSecurityCode: vi.fn(async () => true), maskEmail: (e: string) => e }));
-vi.mock("./rate-limit-db.server", () => ({ sha256Hex: async (v: string) => v, hitRateLimit: vi.fn(async () => ({ ok: true })) }));
+vi.mock("./rate-limit-db.server", () => ({
+  sha256Hex: async (v: string) => v,
+  hitRateLimit: vi.fn(async () => ({ ok: true })),
+  peekRateLimit: vi.fn(async () => {
+    if (state.failures instanceof Error) throw state.failures;
+    return state.failures;
+  }),
+}));
 vi.mock("./audit-log.server", () => ({ recordSecurityEvent: vi.fn(async () => {}) }));
 vi.mock("./design-templates.server", () => ({
   snapshotDesign: async () => null,
