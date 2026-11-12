@@ -93,29 +93,14 @@ async function checkAndRecordSend(
   try {
     const { sql } = await import("@/lib/neon");
 
-    const counts = (await sql`
-      select
-        count(*) filter (where sent_at > now() - interval '10 minutes') as recent_user,
-        count(*) filter (where sent_at > now() - interval '1 day') as daily_user,
-        (select count(*) from public.forwarding_confirmation_sends
-          where lower(recipient) = ${recipient}
-            and sent_at > now() - interval '1 day') as daily_recipient
-      from public.forwarding_confirmation_sends
-      where user_id = ${userId}
+    // Check and record in one serialised database step (db/0240), so parallel
+    // requests cannot slip past the limits together.
+    const rows = (await sql`
+      select public.rout_forwarding_send_check(${userId}::uuid, ${recipient},
+        ${RATE_LIMITS.perUserPer10Min}::int, ${RATE_LIMITS.perUserPerDay}::int, ${RATE_LIMITS.perRecipientPerDay}::int) as verdict
     `) as Record<string, unknown>[];
-    const row = counts[0] ?? {};
-
-    if (Number(row["recent_user"] ?? 0) >= RATE_LIMITS.perUserPer10Min)
-      return "rate_limited_user";
-    if (Number(row["daily_user"] ?? 0) >= RATE_LIMITS.perUserPerDay)
-      return "rate_limited_user";
-    if (Number(row["daily_recipient"] ?? 0) >= RATE_LIMITS.perRecipientPerDay)
-      return "rate_limited_recipient";
-
-    await sql`
-      insert into public.forwarding_confirmation_sends (user_id, recipient)
-      values (${userId}, ${recipient})
-    `;
+    const verdict = rows[0]?.["verdict"];
+    if (verdict === "rate_limited_user" || verdict === "rate_limited_recipient") return verdict;
     return null;
   } catch (error) {
     console.error("[forwarding:rate-limit:failed]", error);

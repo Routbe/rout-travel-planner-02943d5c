@@ -16,11 +16,9 @@ export async function readSwitches(): Promise<SwitchMap> {
 }
 
 export async function listSwitches() {
+  // Admin-only in the database as well (manage_integrations, db/0240).
   const rows = (await sql`
-    select s.provider, s.mode, s.note, s.updated_at, u.email as updated_by_email,
-           (select count(*)::int from public.user_integrations i where i.provider = s.provider) as links
-      from public.platform_integration_switches s
-      left join public.users u on u.id = s.updated_by`) as Row[];
+    select provider, mode, note, updated_at, updated_by_email, links from public.rout_integration_switches_admin_list()`) as Row[];
   const counts = (await sql`select provider, count(*)::int as n from public.user_integrations group by provider`) as Row[];
   return {
     switches: rows.map((r) => ({
@@ -35,11 +33,8 @@ export async function listSwitches() {
 }
 
 export async function setSwitch(opts: { adminId: string; provider: string; mode: SwitchMode; note: string | null }) {
-  await sql`
-    insert into public.platform_integration_switches (provider, mode, note, updated_by, updated_at)
-    values (${opts.provider}, ${opts.mode}, ${opts.note}, ${opts.adminId}, now())
-    on conflict (provider) do update set mode = excluded.mode, note = excluded.note,
-      updated_by = excluded.updated_by, updated_at = now()`;
+  // The database records the signed-in admin as author and re-checks the permission (db/0240).
+  await sql`select public.rout_integration_switch_set(${opts.provider}, ${opts.mode}, ${opts.note})`;
   const { writeAudit } = await import("./admin.server");
   await writeAudit({ adminId: opts.adminId, action: "integration_switch", targetLabel: `${opts.provider}=${opts.mode}`, notes: opts.note });
 }

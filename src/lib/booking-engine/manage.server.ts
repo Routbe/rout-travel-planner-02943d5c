@@ -244,8 +244,7 @@ export async function bookingAction(userId: string, id: string, action: "confirm
   if (action === "cancel") void sendBookingInvite(id, "CANCEL");
   for (const host of new Set(rows.map((r) => r.host_user_id))) {
     if (host === userId) await recomputeUser(userId);
-    else await sql`insert into public.availability_jobs (user_id, reason) values (${host}::uuid, 'booking_action')
-      on conflict (user_id) do update set run_after = least(public.availability_jobs.run_after, now())`;
+    else await sql`select public.rout_availability_enqueue(${host}::uuid, 'booking_action', 0, false)`;
   }
   return { ok: true as const };
 }

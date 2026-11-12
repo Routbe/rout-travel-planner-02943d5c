@@ -26,9 +26,7 @@ async function hostHorizon(userId: string): Promise<number> {
 }
 
 export async function enqueueRecompute(userId: string, reason: string, delaySeconds = 20) {
-  await sql`insert into public.availability_jobs (user_id, reason, run_after)
-    values (${userId}::uuid, ${reason}, now() + make_interval(secs => ${delaySeconds}))
-    on conflict (user_id) do update set reason = excluded.reason, run_after = least(public.availability_jobs.run_after, excluded.run_after)`;
+  await sql`select public.rout_availability_enqueue(${userId}::uuid, ${reason}, ${Math.max(0, Math.round(delaySeconds))}::int, true)`;
 }
 
 const iv = (r: { s: string; e: string }): UtcInterval => ({ startUtc: new Date(r.s), endUtc: new Date(r.e) });
@@ -75,9 +73,8 @@ export async function recomputeUser(userId: string, now = new Date()) {
 
 /** Drain due jobs. Claims rows by deleting them; failures are re-queued with backoff. */
 export async function runDueJobs(limit = 25) {
-  const due = (await sql`delete from public.availability_jobs where user_id in (
-      select user_id from public.availability_jobs where run_after <= now() order by run_after limit ${limit} for update skip locked)
-    returning user_id, attempts`) as { user_id: string; attempts: number }[];
+  // Claimed by deletion with skip locked inside the database (db/0240).
+  const due = (await sql`select user_id, attempts from public.rout_availability_claim_due(${limit}::int)`) as { user_id: string; attempts: number }[];
   let done = 0;
   for (const j of due) {
     try {
@@ -85,10 +82,7 @@ export async function runDueJobs(limit = 25) {
       done++;
     } catch (e) {
       console.error("[availability] recompute", e instanceof Error ? e.message : "error");
-      if (j.attempts < 5)
-        await sql`insert into public.availability_jobs (user_id, reason, run_after, attempts)
-          values (${j.user_id}::uuid, 'retry', now() + make_interval(mins => ${2 ** j.attempts}), ${j.attempts + 1})
-          on conflict (user_id) do nothing`;
+      if (j.attempts < 5) await sql`select public.rout_availability_retry(${j.user_id}::uuid, ${j.attempts}::int)`;
     }
   }
   return { claimed: due.length, done };
@@ -145,8 +139,7 @@ async function syncCalendars(ids: string[]): Promise<number> {
                       ${blocks.map((b) => b.endUtc.toISOString())}::text[], ${blocks.map((b) => b.isBlocking)}::boolean[]) as b(p, s, e, blk)
           on conflict (calendar_id, provider_id) do nothing`,
         sql`update public.connected_calendars set last_synced_at = now(), sync_status = 'ok', last_error_code = null, sync_cursor = ${cursor} where id = ${c.id}::uuid`,
-        sql`insert into public.availability_jobs (user_id, reason) values (${c.user_id}::uuid, 'calendar_sync')
-          on conflict (user_id) do update set run_after = least(public.availability_jobs.run_after, now())`,
+        sql`select public.rout_availability_enqueue(${c.user_id}::uuid, 'calendar_sync', 0, false)`,
       ]);
       synced++;
     } catch (e) {

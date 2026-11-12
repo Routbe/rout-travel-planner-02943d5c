@@ -87,13 +87,10 @@ export async function createBookingRequest(
   const message = (input.guestMessage ?? "").slice(0, BOOKING_MESSAGE_MAX) || null;
   let id: string;
   try {
+    // The database re-checks that the host shows a booking form (db/0240).
     const rows = (await sql`
-      insert into public.booking_requests
-        (profile_id, guest_name, guest_email, preferred_date, preferred_time,
-         guest_message, duration_minutes, title)
-      values (${host.id}, ${input.guestName}, ${input.guestEmail}, ${input.preferredDate},
-              ${input.preferredTime}, ${message}, ${host.config.duration}, ${host.config.title})
-      returning id
+      select public.rout_booking_request_create(${host.id}::uuid, ${input.guestName}, ${input.guestEmail},
+        ${input.preferredDate}::date, ${input.preferredTime}, ${message}, ${host.config.duration}::int, ${host.config.title}) as id
     `) as Row[];
     id = String(rows[0]?.["id"] ?? "");
   } catch (error) {
@@ -136,11 +133,9 @@ export async function resolveBookingRequest(
   action: "accept" | "decline",
 ): Promise<{ ok: boolean; message: string }> {
   const rows = (await sql`
-    update public.booking_requests
-       set status = ${action === "accept" ? "accepted" : "declined"}, updated_at = now()
-     where id = ${id}::uuid and status = 'pending'
-     returning id, profile_id, guest_name, guest_email, preferred_date, preferred_time,
-               guest_message, duration_minutes, title
+    select id, profile_id, guest_name, guest_email, preferred_date, preferred_time,
+           guest_message, duration_minutes, title
+      from public.rout_booking_request_resolve(${id}::uuid, ${action})
   `) as Row[];
   const booking = rows[0];
   if (!booking) {
