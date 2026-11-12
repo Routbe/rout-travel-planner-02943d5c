@@ -719,12 +719,10 @@ export async function endRecurringDonation(paymentId: string) {
 
 /** Successful renewal: keeps the Supporter badge lit for returning donors. */
 export async function confirmRecurringDonation(paymentId: string) {
-  const rows = (await sql`
-    select id, user_id, donation_plan, donation_cents, provider, reference_code, created_at
-      from public.verification_payments where id = ${paymentId} limit 1
-  `) as Row[];
-  const payment = rows[0];
-  if (!payment) return false;
+  const { getPayment } = await import("./payments/verification-payment-store.server");
+  const record = await getPayment(paymentId);
+  if (!record) return false;
+  const payment: Row = record;
   const donationPlan = payment["donation_plan"] as string | null;
   if (!donationPlan || donationPlan === "none") return true;
   const userId = payment["user_id"] as string;
