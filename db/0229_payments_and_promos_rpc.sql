@@ -129,7 +129,7 @@ create or replace function public.rout_promo_admin_save(
 returns boolean language plpgsql volatile security definer set search_path = pg_catalog as $$
 begin
   perform public.rout_require_admin();
-  if p_code !~ '^[A-Z0-9_-]{3,40}$' or coalesce(p_percent, 0) not between 0 and 100 or coalesce(p_amount, 0) < 0
+  if p_code !~ '^[^[:space:]]{1,64}$' or coalesce(p_percent, 0) not between 0 and 100 or coalesce(p_amount, 0) < 0
      or (p_max_redemptions is not null and p_max_redemptions not between 1 and 100000) then
     raise exception 'invalid promo code' using errcode = '22023';
   end if;
@@ -358,7 +358,7 @@ returns jsonb language plpgsql volatile security definer set search_path = pg_ca
 declare v uuid := public.rout_require_member(); r public.verification_payments;
 begin
   if p_provider not in ('stripe', 'sepa', 'bunq') or p_amount not between 0 and 100000
-     or coalesce(p_donation, 0) not between 0 and 100000 or p_plan not in ('none', 'once', 'monthly', 'yearly')
+     or coalesce(p_donation, 0) not between 0 and 100000 or p_plan not in ('none', 'one_time', 'monthly', 'yearly')
      or p_reference !~ '^ROUT-[0-9]{4}$' then
     raise exception 'invalid payment' using errcode = '22023';
   end if;
@@ -385,7 +385,7 @@ returns boolean language plpgsql volatile security definer set search_path = pg_
 declare v uuid := public.rout_require_member();
 begin
   if p_amount not between 0 and 100000 or coalesce(p_donation, 0) not between 0 and 100000
-     or p_plan not in ('none', 'once', 'monthly', 'yearly') then
+     or p_plan not in ('none', 'one_time', 'monthly', 'yearly') then
     raise exception 'invalid payment' using errcode = '22023';
   end if;
   update public.verification_payments
