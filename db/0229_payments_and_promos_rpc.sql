@@ -324,7 +324,7 @@ returns boolean language sql stable security definer set search_path = pg_catalo
        and coalesce((pg_catalog.to_jsonb(p) ->> 'is_business')::boolean, false)
        and t.enabled)
 $$;
-revoke all on function public.rout_psp_public_owner(uuid) from public;
+
 
 -- Public tip page: which providers are linked (no key material).
 create or replace function public.rout_psp_public_providers(p_user uuid)
@@ -350,7 +350,7 @@ returns jsonb language sql immutable set search_path = pg_catalog as $$
     'provider_ref', v.provider_ref, 'reference_code', v.reference_code, 'status', v.status,
     'created_at', v.created_at, 'updated_at', v.updated_at, 'expires_at', v.expires_at)
 $$;
-revoke all on function public.rout_vp_json(public.verification_payments) from public;
+
 
 -- Member: open a new verification payment for themselves (always pending).
 create or replace function public.rout_vp_open(p_provider text, p_amount int, p_donation int, p_plan text, p_reference text)
@@ -518,3 +518,34 @@ create policy psp_purge on public.psp_credentials for delete to rout_app
 drop policy if exists psp_purge_read on public.psp_credentials;
 create policy psp_purge_read on public.psp_credentials for select to rout_app
   using (public.rout_purge_due(user_id));
+
+-- ------------------------------------------------------------------ execute rights
+-- Only the app role may call these functions; the two internal helpers are
+-- reachable solely from inside the functions above.
+do $$
+declare f regprocedure;
+begin
+  for f in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+     where p.pronamespace = 'public'::regnamespace
+       and p.proname = any (array[
+         'rout_caller_is_admin', 'rout_require_member', 'rout_require_admin',
+         'rout_pricing_get', 'rout_pricing_set',
+         'rout_promo_lookup', 'rout_promo_redeem', 'rout_promo_event', 'rout_promo_admin_save',
+         'rout_promo_admin_list', 'rout_promo_admin_terms',
+         'rout_gift_card_create', 'rout_gift_card_activate', 'rout_gift_card_mark_delivered',
+         'rout_gift_card_public', 'rout_gift_card_mine', 'rout_gift_card_recipient',
+         'rout_gift_shipments', 'rout_gift_shipment_update',
+         'rout_psp_save', 'rout_psp_delete', 'rout_psp_public_owner', 'rout_psp_public_providers',
+         'rout_psp_tip_credential',
+         'rout_vp_json', 'rout_vp_open', 'rout_vp_attach_ref', 'rout_vp_reprice',
+         'rout_vp_expire_own_open_stripe', 'rout_vp_fail_own', 'rout_vp_get', 'rout_vp_find',
+         'rout_vp_claim_paid', 'rout_vp_mark', 'rout_vp_end_donation', 'rout_vp_sepa_candidates',
+         'rout_vp_paid_sequence', 'rout_vp_transfer_scan'])
+  loop
+    execute pg_catalog.format('revoke all on function %s from public', f);
+    if f::text not like 'rout_vp_json(%' and f::text not like 'rout_psp_public_owner(%' then
+      execute pg_catalog.format('grant execute on function %s to rout_app', f);
+    end if;
+  end loop;
+end $$;
