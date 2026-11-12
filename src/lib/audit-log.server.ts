@@ -3,7 +3,7 @@
  * except the database and structured stdout.
  */
 import { sql, runBatch } from "@/lib/neon";
-import { AUDIT_RETENTION_DAYS, checkpointMessage, hmacSha256Hex, sha256Hex } from "@/lib/audit-chain";
+import { checkpointMessage, hmacSha256Hex, sha256Hex } from "@/lib/audit-chain";
 
 export interface SecurityEvent {
   eventType: string;
