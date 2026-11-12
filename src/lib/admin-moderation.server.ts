@@ -274,7 +274,8 @@ export async function setSuspension(opts: {
     message: opts.suspended
       ? "Your ROUT profile has been suspended by moderation."
       : "Your ROUT profile is live again.",
-    details: { reason: opts.reason ?? null, admin_id: opts.adminId, notify: "email" },});
+    details: { reason: opts.reason ?? null, admin_id: opts.adminId, notify: "email" },
+  }).catch((error) => console.error("[security-event] write failed", error));
 
   await writeAudit({
     adminId: opts.adminId,
@@ -405,7 +406,8 @@ export async function changeHandle(opts: {
       vip: Boolean(grant),
       admin_id: opts.adminId,
       reason,
-    },});
+    },
+  }).catch((error) => console.error("[security-event] write failed", error));
 
   await writeAudit({
     adminId: opts.adminId,
@@ -714,7 +716,8 @@ export async function markUserPaid(opts: {
     message: opts.paid
       ? "Your Early Believer status is active — your @rout.be alias is being created."
       : "Your Early Believer status was revoked.",
-    details: { admin_id: opts.adminId, note: opts.note ?? null },});
+    details: { admin_id: opts.adminId, note: opts.note ?? null },
+  }).catch((error) => console.error("[security-event] write failed", error));
 
   await writeAudit({
     adminId: opts.adminId,
@@ -1177,7 +1180,8 @@ export async function revokeVipGrant(opts: {
     kind: "vip_handle_revoked",
     severity: "warning",
     message: "Your VIP short-handle grant was revoked.",
-    details: { handle: profile.username, admin_id: opts.adminId, reason: opts.reason ?? null },});
+    details: { handle: profile.username, admin_id: opts.adminId, reason: opts.reason ?? null },
+  }).catch((error) => console.error("[security-event] write failed", error));
 
   await writeAudit({
     adminId: opts.adminId,
