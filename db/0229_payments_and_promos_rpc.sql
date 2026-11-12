@@ -515,3 +515,6 @@ create policy psp_owner_read on public.psp_credentials for select to rout_app
 drop policy if exists psp_purge on public.psp_credentials;
 create policy psp_purge on public.psp_credentials for delete to rout_app
   using (public.rout_purge_due(user_id));
+drop policy if exists psp_purge_read on public.psp_credentials;
+create policy psp_purge_read on public.psp_credentials for select to rout_app
+  using (public.rout_purge_due(user_id));
