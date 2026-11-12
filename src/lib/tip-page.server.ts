@@ -127,6 +127,7 @@ export async function writeTipSettings(userId: string, input: TipSettings) {
 
 export type PspStatus = { provider: PspProvider; last4: string; mode: string; verifiedAt: string };
 
+/** The signed-in member's own keys (owner policy, non-secret columns only). */
 export async function listPsp(userId: string): Promise<PspStatus[]> {
   try {
     const rows = (await sql`select provider, last4, mode, verified_at from public.psp_credentials where user_id = ${userId}`) as Row[];
@@ -173,22 +174,28 @@ export async function savePsp(userId: string, provider: PspProvider, rawSecret: 
   if (!(await probeKey(provider, secret))) return { ok: false as const, message: "De provider weigerde deze sleutel." };
   const mode = /(^|_)test_/.test(secret) ? "test" : "live";
   const { ciphertext, iv } = await seal(secret, `${userId}:${provider}`);
-  await sql`
-    insert into public.psp_credentials (user_id, provider, ciphertext, iv, last4, mode, publishable_key, verified_at)
-    values (${userId}, ${provider}, ${ciphertext}, ${iv}, ${secret.slice(-4)}, ${mode}, ${pk}, now())
-    on conflict (user_id, provider) do update set
-      ciphertext = excluded.ciphertext, iv = excluded.iv, last4 = excluded.last4, mode = excluded.mode,
-      publishable_key = excluded.publishable_key, verified_at = now()
-  `;
+  // 0229: the database stores the sealed key for the caller of this request only.
+  await sql`select public.rout_psp_save(${provider}, ${ciphertext}, ${iv}, ${secret.slice(-4)}, ${mode}, ${pk})`;
   return { ok: true as const };
 }
 
-export async function deletePsp(userId: string, provider: PspProvider) {
-  await sql`delete from public.psp_credentials where user_id = ${userId} and provider = ${provider}`;
+export async function deletePsp(_userId: string, provider: PspProvider) {
+  // 0229: only the caller's own key can be removed.
+  await sql`select public.rout_psp_delete(${provider})`;
   return { ok: true as const };
 }
 
 /* ------------------------------ Publieke pagina ----------------------------- */
+
+/** Which providers a creator with an active public tip page has linked. */
+async function publicPspProviders(userId: string): Promise<PspProvider[]> {
+  try {
+    const rows = (await sql`select p from public.rout_psp_public_providers(${userId}) as p`) as Row[];
+    return rows.map((r) => r["p"] as PspProvider);
+  } catch {
+    return [];
+  }
+}
 
 export type PublicTipPage = {
   handle: string;
@@ -226,9 +233,10 @@ export async function readPublicTipPage(rawHandle: string): Promise<PublicTipPag
     const s = await readTipSettings(owner.id);
     if (!s.enabled || !isValidIban(s.iban) || !s.accountName) return null;
     // PSP-knoppen alleen voor goedgekeurde bedrijven; QR + IBAN blijven altijd.
-    const psp = elig.isBusiness ? await listPsp(owner.id) : [];
-    const mollie = psp.find((p) => p.provider === "mollie");
-    const stripe = psp.find((p) => p.provider === "stripe");
+    // Visitors only learn which providers are linked, never key details (0229).
+    const psp = elig.isBusiness ? await publicPspProviders(owner.id) : [];
+    const mollie = psp.includes("mollie");
+    const stripe = psp.includes("stripe");
     return {
       handle: owner.handle,
       displayName: owner.displayName,
@@ -273,7 +281,8 @@ export async function startPspTip(opts: { handle: string; amountCents: number; m
   if (amount === null) return { ok: false as const, message: "Ongeldig bedrag." };
   const owner = await ownerOf(page.handle);
   if (!owner) return { ok: false as const, message: "Onbekende maker." };
-  const rows = (await sql`select ciphertext, iv from public.psp_credentials where user_id = ${owner.id} and provider = ${page.psp.provider} limit 1`) as Row[];
+  // 0229: the sealed key of a creator with an active public tip page, nothing else.
+  const rows = (await sql`select * from public.rout_psp_tip_credential(${owner.id}, ${page.psp.provider})`) as Row[];
   if (!rows[0]) return { ok: false as const, message: "Geen betaalprovider gekoppeld." };
   const { open } = await import("./crypto/secretbox.server");
   const secret = await open(String(rows[0]["ciphertext"]), String(rows[0]["iv"]), `${owner.id}:${page.psp.provider}`);
@@ -283,8 +292,7 @@ export async function startPspTip(opts: { handle: string; amountCents: number; m
   try {
     if (page.psp.provider === "stripe") {
       // Ingebouwd: PaymentIntent op het account van de maker; de browser toont Stripe's eigen betaalvenster.
-      const pkRows = (await sql`select publishable_key from public.psp_credentials where user_id = ${owner.id} and provider = 'stripe' limit 1`) as Row[];
-      const publishableKey = (pkRows[0]?.["publishable_key"] as string | null) ?? null;
+      const publishableKey = (rows[0]["publishable_key"] as string | null) ?? null;
       if (!publishableKey) return { ok: false as const, message: "Deze maker moet zijn Stripe-koppeling vernieuwen." };
       const body = new URLSearchParams({
         amount: String(amount),
