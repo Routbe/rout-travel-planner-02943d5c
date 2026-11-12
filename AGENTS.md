@@ -60,3 +60,6 @@ use the editor.
 
 ## Legacy runtime access
 - The free `rout_server` policies from db/0154 are removed table by table, only after every runtime read/write is moved into the owner's context or a narrow SECURITY DEFINER function; account purge deletes rely on `public.rout_purge_due(user_id)`. Why: dropping them all at once stops sign-in, payments and admin, and the purge runs without a member context.
+
+## Neon database access
+- The app runtime connects only through the DATABASE_URL secret (rout_app login); the owner-level Neon connection stays unlinked from the project and is used solely by the agent for reviewed schema work. Why: a linked NEON_API_KEY makes the gateway transport win over DATABASE_URL, so preview would diverge from the Vercel runtime.
