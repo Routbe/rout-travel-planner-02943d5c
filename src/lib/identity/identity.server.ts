@@ -1,5 +1,5 @@
 import { sql } from "@/lib/neon";
-import { DIDIT_MONTHLY_LIMIT, monthKey, normalizeRealName, type IdentityProvider } from "./identity-rules";
+import { DIDIT_MONTHLY_LIMIT, normalizeRealName, type IdentityProvider } from "./identity-rules";
 import { isLegalProvider, verificationDecision } from "./identity-tiers";
 
 /** Server-side pepper; ruwe provider-ID's worden nooit opgeslagen. */

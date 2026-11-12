@@ -1,7 +1,7 @@
 /** Server-side entitlement engine: loads plan + overrides per scope and grants promotions. */
 import { sql } from "@/lib/neon";
 import { getWorkspaceRole } from "./workspaces.server";
-import { earlyVerifiedGrants, scopeStorageSummary, type ScopeStorageSummary, ENTITLEMENT_KEYS, plusCredits, type Override, type Scope, type ScopeInput } from "./entitlement-engine";
+import { scopeStorageSummary, type ScopeStorageSummary, plusCredits, type Override, type Scope, type ScopeInput } from "./entitlement-engine";
 
 type Row = Record<string, unknown>;
 
