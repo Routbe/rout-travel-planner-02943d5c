@@ -62,7 +62,7 @@ export async function cachedCityWeather(city: string): Promise<WeatherState | nu
   if (weatherCacheFresh(typeof row?.checked_at === "string" ? row.checked_at : null)) return stored;
   // Atomic lease prevents concurrent visitors from making the same API calls.
   const lease = await weatherQuery<Row>("select public.rout_weather_cache_lease($1) as leased", [key]);
-  if (lease[0]?.leased !== true) return stored;
+  if (lease[0]?.["leased"] !== true) return stored;
   let state: WeatherState | null = null;
   try {
     const [name, countryHint] = city.split(",").map((p) => p.trim());
