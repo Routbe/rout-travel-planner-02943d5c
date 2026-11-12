@@ -76,14 +76,8 @@ export async function matchInboundPayment(text: string): Promise<MatchOutcome> {
 
   let payment: PaymentRow | null = null;
   if (reference) {
-    const { data } = await dbAdmin
-      .from("verification_payments")
-      .select("id, user_id, tier, status, amount_cents, donation_cents, reference_code")
-      .eq("reference_code", reference)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    payment = (data as PaymentRow | null) ?? null;
+    const { findPaymentByReference } = await import("./payments/verification-payment-store.server");
+    payment = await findPaymentByReference(reference);
   }
 
   // ---- Level 1: reference resolves and the amount is right (or absent). ----
@@ -108,10 +102,8 @@ export async function matchInboundPayment(text: string): Promise<MatchOutcome> {
       const holderName = await accountHolderName(payment.user_id);
       const nameMatch = payerName ? matchPayerName(payerName, holderName) : null;
       if (nameMatch && nameMatch.verdict !== "strong") {
-        await dbAdmin
-          .from("verification_payments")
-          .update({ status: "processing" })
-          .eq("id", payment.id);
+        const { markStatus } = await import("./payments/verification-payment-store.server");
+        await markStatus(payment.id, "processing");
         await queueSepaReview({
           paymentId: payment.id,
           userId: payment.user_id,
@@ -176,24 +168,14 @@ export async function matchInboundPayment(text: string): Promise<MatchOutcome> {
 
   // ---- Level 2: amount matches exactly one pending transfer. ----
   if (amountCents !== null) {
-    const { data } = await dbAdmin
-      .from("verification_payments")
-      .select("id, user_id, tier, status, amount_cents, donation_cents, reference_code")
-      .eq("provider", "sepa")
-      .neq("status", "paid")
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    const candidates = ((data as PaymentRow[] | null) ?? []).filter(
+    const store = await import("./payments/verification-payment-store.server");
+    const candidates = (await store.sepaCandidates(amountCents)).filter(
       (row) => expectedCents(row) === amountCents,
     );
 
     if (candidates.length === 1) {
       const candidate = candidates[0]!;
-      await dbAdmin
-        .from("verification_payments")
-        .update({ status: "processing" })
-        .eq("id", candidate.id);
+      await store.markStatus(candidate.id, "processing");
 
       // ---- Level 2b: right amount, different payer name. ----
       const payerName = extractPayerName(text);
@@ -317,13 +299,8 @@ export async function settleSepaPayment(
   amountCents: number | null,
 ): Promise<boolean> {
   try {
-    const { dbAdmin } = await import("@/lib/db/admin.server");
-    const { data } = await dbAdmin
-      .from("verification_payments")
-      .select("id, user_id, tier, status, amount_cents, donation_cents, reference_code")
-      .eq("id", paymentId)
-      .maybeSingle();
-    const payment = (data as PaymentRow | null) ?? null;
+    const { getPayment } = await import("./payments/verification-payment-store.server");
+    const payment: PaymentRow | null = await getPayment(paymentId);
     if (!payment) return false;
     if (payment.status === "paid") return false;
     await activate(payment, reference ?? payment.reference_code ?? "manual-review", amountCents);
@@ -389,10 +366,12 @@ async function activate(
 ) {
   const { dbAdmin } = await import("@/lib/db/admin.server");
 
-  await dbAdmin
-    .from("verification_payments")
-    .update({ status: "paid", provider_ref: reference })
-    .eq("id", payment.id);
+  // Atomic claim (0229): a second notification for the same transfer stops here.
+  const { claimPaid } = await import("./payments/verification-payment-store.server");
+  if (!(await claimPaid(payment.id, reference))) {
+    console.info("[sepa-match] already settled", { paymentId: payment.id, reference });
+    return;
+  }
 
   await dbAdmin
     .from("profiles")

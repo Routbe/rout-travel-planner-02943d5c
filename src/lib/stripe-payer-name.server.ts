@@ -88,13 +88,8 @@ export async function verifyStripePayerName(opts: {
   paymentId: string;
   reference: string | null;
 }): Promise<PayerNameVerdict> {
-  const { dbAdmin } = await import("@/lib/db/admin.server");
-  const { data } = await dbAdmin
-    .from("verification_payments")
-    .select("id, user_id, amount_cents, donation_cents, reference_code")
-    .eq("id", opts.paymentId)
-    .maybeSingle();
-  const payment = (data as PaymentRow | null) ?? null;
+  const store = await import("./payments/verification-payment-store.server");
+  const payment: PaymentRow | null = await store.getPayment(opts.paymentId);
   if (!payment) {
     return {
       ok: false,
@@ -115,10 +110,7 @@ export async function verifyStripePayerName(opts: {
   const holderName = await accountHolderName(payment.user_id);
 
   const hold = async (reason: "no_bank_name" | "name_mismatch", score: number) => {
-    await dbAdmin
-      .from("verification_payments")
-      .update({ status: "processing" })
-      .eq("id", payment.id);
+    await store.markStatus(payment.id, "processing");
     await queueSepaReview({
       paymentId: payment.id,
       userId: payment.user_id,
