@@ -71,7 +71,7 @@ returns boolean language sql stable security definer set search_path = pg_catalo
                 where t.client_id = c.client_id
                   and (t.identifier = (select pg_catalog.lower(u.email) from public.users u where u.id = public.rout_current_user_id())
                     or t.identifier in (select pg_catalog.lower(p.username) from public.profiles p
-                                         where (p.user_id = public.rout_current_user_id() or p.id = public.rout_current_user_id())
+                                         where p.id = public.rout_current_user_id()
                                            and p.username is not null)))))
 $$;
 
