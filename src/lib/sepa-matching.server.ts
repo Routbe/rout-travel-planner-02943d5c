@@ -69,7 +69,6 @@ async function recordInboundEvent(reference: string | null): Promise<void> {
 export async function matchInboundPayment(text: string): Promise<MatchOutcome> {
   const reference = parseRoutReference(text);
   const amountCents = parseAmountCents(text);
-  const { dbAdmin } = await import("@/lib/db/admin.server");
 
   console.info("[sepa-match] inbound", { reference, amountCents, length: text.length });
   await recordInboundEvent(reference);
