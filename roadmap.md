@@ -11,7 +11,8 @@
 - [x] Inventory remaining rout_server tables (49 total: 12 covered by 0230/0231, 37 still open)
 - [x] Batch 5 expand — db/0232 live on Neon (source hash verified, live flows tested as rout_app with rollback) + code uses it (tests: abuse-rpc)
 - [ ] Batch 5 contract — db-pending/0233_abuse_lockdown.sql, with 0230/0231 once production health reports schema >= 0232 — altcha_used, signin_throttle, rate_limits, upload_rate_limits, login_codes, fediverse_email_otp, telegram_verify_sessions, mastodon_app_registrations
-- [ ] Batch 6 (approved after 5) — security logs & webhooks: security_audit_logs, security_events, webhook_events, webhook_deliveries, sepa_review_queue
+- [x] Batch 6 expand — db/0234 live on Neon (source hash verified, live flows tested as rout_app with rollback) + code uses it (tests: security-logs-rpc)
+- [ ] Batch 6 contract — db-pending/0235_security_logs_lockdown.sql once production health reports schema >= 0234 — security_audit_logs, security_events, webhook_events, webhook_deliveries, sepa_review_queue
 - [ ] Batch 7 (approved after 5) — identity, credentials & entitlements: credential_issue_requests, credential_issuer_blocks, identity_labels, account_merge_tickets, api_keys, reserved_handles, badges, entitlement_overrides, referrals, didit_monthly_usage
 - [ ] Batch 8 — public profile & analytics: links, profile_link_clicks, qr_scans, poll_votes, showcase_profiles, lead_captures, contact_submissions, onboarding_drafts
 - [ ] Batch 9 — agenda, jobs & caches: availability_jobs, booking_requests, alias_sync_jobs, forwarding_confirmation_sends, ambient_weather_cache, platform_integration_switches
