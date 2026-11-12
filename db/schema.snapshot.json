@@ -1856,26 +1856,8 @@
       "triggers": [],
       "rls": true,
       "forceRls": false,
-      "policies": [
-        {
-          "name": "rout_server",
-          "permissive": true,
-          "roles": [
-            "rout_app"
-          ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
-        }
-      ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -1924,24 +1906,71 @@
       "forceRls": false,
       "policies": [
         {
-          "name": "rout_server",
+          "name": "rout_owner_purge",
           "permissive": true,
           "roles": [
             "rout_app"
           ],
-          "cmd": "ALL",
-          "using": "true",
-          "check": "true"
+          "cmd": "DELETE",
+          "using": "rout_purge_due(consumed_by)",
+          "check": null
+        },
+        {
+          "name": "rout_owner_purge_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_purge_due(consumed_by)",
+          "check": null
         }
       ],
       "grants": {
         "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "DELETE"
         ]
       }
+    },
+    {
+      "schema": "public",
+      "name": "admin_owner_emails",
+      "columns": [
+        {
+          "name": "email",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "identity": null,
+          "generated": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "admin_owner_emails_email_check",
+          "kind": "c",
+          "def": "CHECK ((email = lower(email)))"
+        },
+        {
+          "name": "admin_owner_emails_pkey",
+          "kind": "p",
+          "def": "PRIMARY KEY (email)"
+        }
+      ],
+      "indexes": [],
+      "triggers": [],
+      "rls": true,
+      "forceRls": false,
+      "policies": [],
+      "grants": {}
     },
     {
       "schema": "public",
@@ -2026,14 +2055,42 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "rout_owner",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "((user_id)::text = current_setting('rout.current_user_id'::text, true))",
+          "check": null
+        },
+        {
+          "name": "rout_owner_purge",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "rout_purge_due(user_id)",
+          "check": null
+        },
+        {
+          "name": "rout_owner_purge_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_purge_due(user_id)",
+          "check": null
         }
       ],
       "grants": {
         "rout_app": [
           "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -4005,14 +4062,7 @@
           "check": "true"
         }
       ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "grants": {}
     },
     {
       "schema": "public",
@@ -11893,6 +11943,26 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "rout_owner_purge",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "rout_purge_due(user_id)",
+          "check": null
+        },
+        {
+          "name": "rout_owner_purge_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_purge_due(user_id)",
+          "check": null
         }
       ],
       "grants": {
@@ -12545,6 +12615,36 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "rout_owner",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "((user_id = rout_current_user_id()) OR rout_purge_due(user_id))",
+          "check": null
+        },
+        {
+          "name": "rout_owner_purge",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "rout_purge_due(user_id)",
+          "check": null
+        },
+        {
+          "name": "rout_owner_revoke",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "UPDATE",
+          "using": "(user_id = rout_current_user_id())",
+          "check": "(user_id = rout_current_user_id())"
         }
       ],
       "grants": {
@@ -14522,14 +14622,7 @@
           "check": "true"
         }
       ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "grants": {}
     },
     {
       "schema": "public",
@@ -19895,14 +19988,7 @@
           "check": "true"
         }
       ],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "grants": {}
     },
     {
       "schema": "public",
@@ -24092,14 +24178,42 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "rout_owner",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "((user_id)::text = current_setting('rout.current_user_id'::text, true))",
+          "check": null
+        },
+        {
+          "name": "rout_owner_purge",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "rout_purge_due(user_id)",
+          "check": null
+        },
+        {
+          "name": "rout_owner_purge_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_purge_due(user_id)",
+          "check": null
         }
       ],
       "grants": {
         "rout_app": [
           "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
+          "SELECT"
         ]
       }
     },
@@ -27980,13 +28094,49 @@
       "schema": "public",
       "name": "rotate_oauth_refresh",
       "args": "old_hash text, target_client text, new_hash text",
-      "def": "CREATE OR REPLACE FUNCTION public.rotate_oauth_refresh(old_hash text, target_client text, new_hash text)\n RETURNS TABLE(result text, user_id uuid, subject text, scopes text[], family_id uuid, auth_time timestamp with time zone, acr text)\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare old public.oauth_refresh_tokens%rowtype;\nbegin\n  select * into old from public.oauth_refresh_tokens t where t.token_hash=old_hash and t.client_id=target_client for update;\n  if not found then return query select 'invalid'::text,null::uuid,null::text,null::text[],null::uuid,null::timestamptz,null::text; return; end if;\n  -- Family-wide advisory lock prevents a concurrent descendant issuance from escaping revocation.\n  perform pg_advisory_xact_lock(hashtextextended(old.family_id::text,0));\n  if old.used_at is not null then\n    update public.oauth_refresh_tokens t set revoked_at=coalesce(t.revoked_at,now()) where t.family_id=old.family_id;\n    update public.oauth_access_tokens t set revoked_at=coalesce(t.revoked_at,now()) where t.family_id=old.family_id;\n    return query select 'reuse'::text,null::uuid,null::text,null::text[],old.family_id,null::timestamptz,null::text; return;\n  end if;\n  if old.revoked_at is not null or old.expires_at<=now()\n    or exists(select 1 from public.oauth_refresh_tokens t where t.family_id=old.family_id and t.revoked_at is not null)\n    or not exists(select 1 from public.oauth_consents c where c.user_id=old.user_id and c.client_id=target_client and c.revoked_at is null and 'offline_access'=any(c.scopes))\n    or not exists(select 1 from public.users u where u.id=old.user_id and not u.is_disabled and u.account_status='active')\n    or not exists(select 1 from public.oauth_clients c where c.client_id=target_client and c.status='active') then\n    return query select 'invalid'::text,null::uuid,null::text,null::text[],old.family_id,null::timestamptz,null::text; return;\n  end if;\n  update public.oauth_refresh_tokens t set used_at=now() where t.id=old.id;\n  insert into public.oauth_refresh_tokens(family_id,token_hash,client_id,user_id,scopes,expires_at,subject,auth_time,acr)\n  values(old.family_id,new_hash,target_client,old.user_id,old.scopes,old.expires_at,old.subject,old.auth_time,old.acr);\n  return query select 'ok'::text,old.user_id,old.subject,old.scopes,old.family_id,old.auth_time,old.acr;\nend $function$"
+      "def": "CREATE OR REPLACE FUNCTION public.rotate_oauth_refresh(old_hash text, target_client text, new_hash text)\n RETURNS TABLE(result text, user_id uuid, subject text, scopes text[], family_id uuid, auth_time timestamp with time zone, acr text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare old public.oauth_refresh_tokens%rowtype;\nbegin\n  select * into old from public.oauth_refresh_tokens t where t.token_hash=old_hash and t.client_id=target_client for update;\n  if not found then return query select 'invalid'::text,null::uuid,null::text,null::text[],null::uuid,null::timestamptz,null::text; return; end if;\n  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(old.family_id::text,0));\n  if old.used_at is not null then\n    update public.oauth_refresh_tokens t set revoked_at=coalesce(t.revoked_at,now()) where t.family_id=old.family_id;\n    update public.oauth_access_tokens t set revoked_at=coalesce(t.revoked_at,now()) where t.family_id=old.family_id;\n    return query select 'reuse'::text,null::uuid,null::text,null::text[],old.family_id,null::timestamptz,null::text; return;\n  end if;\n  if old.revoked_at is not null or old.expires_at<=now()\n    or exists(select 1 from public.oauth_refresh_tokens t where t.family_id=old.family_id and t.revoked_at is not null)\n    or not exists(select 1 from public.oauth_consents c where c.user_id=old.user_id and c.client_id=target_client and c.revoked_at is null and 'offline_access'=any(c.scopes))\n    or not exists(select 1 from public.users u where u.id=old.user_id and not u.is_disabled and u.account_status='active')\n    or not exists(select 1 from public.oauth_clients c where c.client_id=target_client and c.status='active') then\n    return query select 'invalid'::text,null::uuid,null::text,null::text[],old.family_id,null::timestamptz,null::text; return;\n  end if;\n  update public.oauth_refresh_tokens t set used_at=now() where t.id=old.id;\n  insert into public.oauth_refresh_tokens(family_id,token_hash,client_id,user_id,scopes,expires_at,subject,auth_time,acr)\n  values(old.family_id,new_hash,target_client,old.user_id,old.scopes,old.expires_at,old.subject,old.auth_time,old.acr);\n  return query select 'ok'::text,old.user_id,old.subject,old.scopes,old.family_id,old.auth_time,old.acr;\nend $function$"
     },
     {
       "schema": "public",
       "name": "rout_accept_workspace_invites",
       "args": "p_email text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_accept_workspace_invites(p_email text)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare uid uuid := public.rout_current_user_id(); n integer := 0;\nbegin\n  if uid is null then return 0; end if;\n  with inv as (\n    update public.workspace_invites set status = 'accepted'\n    where status = 'pending'\n      and (invited_user_id = uid or (coalesce(p_email, '') <> '' and invited_user_id is null and lower(email) = lower(p_email)))\n    returning workspace_id, role\n  )\n  insert into public.workspace_members (workspace_id, user_id, role)\n  select distinct on (workspace_id) workspace_id, uid, role from inv\n  on conflict do nothing;\n  get diagnostics n = row_count;\n  return n;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_admin_bootstrap_claim",
+      "args": "p_token_hash text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_admin_bootstrap_claim(p_token_hash text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null or p_token_hash is null or p_token_hash !~ '^[0-9a-f]{64}$' then return false; end if;\n  perform pg_advisory_xact_lock(hashtextextended('rout.admin_bootstrap', 0));\n  if public.rout_any_admin() then return false; end if;\n  if (select u.id from public.users u order by u.created_at asc limit 1) is distinct from v_user then return false; end if;\n  insert into public.admin_bootstrap_tokens (token_hash, consumed_by, consumed_at)\n  values (p_token_hash, v_user, now()) on conflict (token_hash) do nothing;\n  if not found then return false; end if;\n  insert into public.user_roles (user_id, role) values (v_user, 'admin') on conflict (user_id, role) do nothing;\n  perform public.rout_audit_insert(v_user, (select email from public.users where id = v_user),\n    'ADMIN_BOOTSTRAP_CLAIMED', v_user, null, null);\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_admin_email_eligible",
+      "args": "p_email text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_admin_email_eligible(p_email text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (select 1 from public.users u\n                  where lower(u.email) = lower(pg_catalog.btrim(p_email))\n                    and public.rout_is_admin_member(u.id))\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_admin_grant_owner",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_admin_grant_owner()\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null or not exists (\n    select 1 from public.users u join public.admin_owner_emails o on o.email = lower(u.email)\n     where u.id = v_user) then\n    return false;\n  end if;\n  insert into public.user_roles (user_id, role) values (v_user, 'admin') on conflict (user_id, role) do nothing;\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_admin_grants_list",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_admin_grants_list()\n RETURNS TABLE(user_id uuid, email text, username text, permissions text[], full_admin boolean)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_caller_has_admin_permission('manage_admins') then\n    raise exception 'forbidden' using errcode = '42501';\n  end if;\n  return query\n    select u.id, u.email::text, p.username::text,\n           public.rout_admin_permissions_of(u.id), public.rout_has_role(u.id, 'admin')\n      from public.users u left join public.profiles p on p.id = u.id\n     where public.rout_is_admin_member(u.id)\n     order by u.email nulls last limit 100;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_admin_permission_set",
+      "args": "p_target uuid, p_permission text, p_granted boolean",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_admin_permission_set(p_target uuid, p_permission text, p_granted boolean)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_actor uuid := public.rout_current_user_id();\nbegin\n  if not public.rout_caller_has_admin_permission('manage_admins') then\n    raise exception 'forbidden' using errcode = '42501';\n  end if;\n  if p_target is null or p_permission is null or p_permission not in ('verify_users', 'edit_names',\n       'manage_promos', 'view_device_data', 'block_features', 'manage_admins', 'approve_sepa',\n       'grant_badges', 'manage_integrations', 'review_apps', 'export_data', 'triage_contact') then\n    return false;\n  end if;\n  if p_granted then\n    insert into public.admin_permissions (user_id, permission, granted_by)\n    values (p_target, p_permission, v_actor) on conflict (user_id, permission) do nothing;\n  else\n    delete from public.admin_permissions where user_id = p_target and permission = p_permission;\n  end if;\n  perform public.rout_audit_insert(v_actor, (select email from public.users where id = v_actor),\n    case when p_granted then 'admin_permission_grant' else 'admin_permission_revoke' end,\n    p_target, p_permission, null);\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_admin_permissions_of",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_admin_permissions_of(p_user uuid)\n RETURNS text[]\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select coalesce(array_agg(p.permission order by p.permission), '{}'::text[])\n    from public.admin_permissions p where p.user_id = p_user\n$function$"
     },
     {
       "schema": "public",
@@ -28053,6 +28203,54 @@
       "name": "rout_agent_sandbox_state",
       "args": "p_key_hash text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_agent_sandbox_state(p_key_hash text)\n RETURNS TABLE(draft jsonb, revision bigint, apps jsonb)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select d.payload, d.revision, c.pending_apps\n    from public.agent_sandboxes s\n    join public.workspace_profile_drafts d on d.workspace_id = s.workspace_id\n    join public.agent_workspace_claims c on c.workspace_id = s.workspace_id\n   where s.key_hash = p_key_hash and s.revoked_at is null and s.expires_at > now()\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_any_admin",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_any_admin()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (select 1 from public.user_roles r where r.role::text = 'admin')\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_audit_actions",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_audit_actions()\n RETURNS text[]\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_is_admin_member(public.rout_current_user_id()) then\n    raise exception 'forbidden' using errcode = '42501';\n  end if;\n  return (select coalesce(array_agg(distinct a.action order by a.action), '{}'::text[])\n            from (select action from public.admin_audit_log order by created_at desc limit 1000) a);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_audit_insert",
+      "args": "p_admin uuid, p_email text, p_action text, p_target uuid, p_label text, p_notes text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_audit_insert(p_admin uuid, p_email text, p_action text, p_target uuid, p_label text, p_notes text)\n RETURNS void\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  insert into public.admin_audit_log (admin_id, admin_email, action, target_user_id, target_label, notes)\n  values (p_admin, p_email, left(p_action, 80), p_target, left(p_label, 300), left(p_notes, 2000))\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_audit_search",
+      "args": "p_admin_email text, p_action text, p_actions text[], p_search text, p_from timestamp with time zone, p_to timestamp with time zone, p_cursor_at timestamp with time zone, p_cursor_id uuid, p_offset integer, p_limit integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_audit_search(p_admin_email text, p_action text, p_actions text[], p_search text, p_from timestamp with time zone, p_to timestamp with time zone, p_cursor_at timestamp with time zone, p_cursor_id uuid, p_offset integer, p_limit integer)\n RETURNS TABLE(id uuid, admin_email text, action text, target_user_id uuid, target_label text, notes text, created_at timestamp with time zone, total bigint)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_is_admin_member(public.rout_current_user_id()) then\n    raise exception 'forbidden' using errcode = '42501';\n  end if;\n  return query\n    select a.id, a.admin_email, a.action, a.target_user_id, a.target_label, a.notes, a.created_at,\n           count(*) over ()\n      from public.admin_audit_log a\n     where (nullif(p_admin_email, '') is null or a.admin_email ilike public.rout_like_literal(p_admin_email))\n       and (nullif(p_action, '') is null or a.action = p_action)\n       and (p_actions is null or a.action = any (p_actions))\n       and (nullif(p_search, '') is null\n            or a.action ilike public.rout_like_literal(p_search)\n            or a.admin_email ilike public.rout_like_literal(p_search)\n            or a.target_label ilike public.rout_like_literal(p_search)\n            or a.notes ilike public.rout_like_literal(p_search))\n       and (p_from is null or a.created_at >= p_from)\n       and (p_to is null or a.created_at <= p_to)\n       and (p_cursor_at is null or a.created_at < p_cursor_at\n            or (a.created_at = p_cursor_at and a.id < p_cursor_id))\n     order by a.created_at desc, a.id desc\n     offset greatest(coalesce(p_offset, 0), 0)\n     limit least(greatest(coalesce(p_limit, 20), 1), 1000);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_audit_write",
+      "args": "p_action text, p_target uuid, p_label text, p_notes text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_audit_write(p_action text, p_target uuid, p_label text, p_notes text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_actor uuid := public.rout_current_user_id(); v_email text;\nbegin\n  if v_actor is null or not public.rout_is_admin_member(v_actor)\n     or p_action is null or p_action !~ '^[A-Za-z0-9_.:-]{1,80}$' then\n    return false;\n  end if;\n  select u.email into v_email from public.users u where u.id = v_actor;\n  perform public.rout_audit_insert(v_actor, v_email, p_action, p_target, p_label, p_notes);\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_audit_write_system",
+      "args": "p_action text, p_target uuid, p_label text, p_notes text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_audit_write_system(p_action text, p_target uuid, p_label text, p_notes text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_action is null or p_action not in ('AUTO_PAYMENT_VERIFIED', 'PAYMENT_REVIEW_REQUIRED') then\n    return false;\n  end if;\n  perform public.rout_audit_insert(coalesce(p_target, '00000000-0000-0000-0000-000000000000'::uuid),\n    'system@rout.be', p_action, p_target, p_label, p_notes);\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_auth_secrets_clear",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_auth_secrets_clear()\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null then return; end if;\n  delete from public.auth_tokens where user_id = v_user;\n  delete from public.security_codes where user_id = v_user;\n  delete from public.phone_otp_codes where user_id = v_user;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_auth_secrets_purge",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_auth_secrets_purge(p_user uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_purge_due(p_user) then raise exception 'purge_not_due' using errcode = '42501'; end if;\n  delete from public.auth_tokens where user_id = p_user;\n  delete from public.security_codes where user_id = p_user;\n  delete from public.phone_otp_codes where user_id = p_user;\nend $function$"
     },
     {
       "schema": "public",
@@ -28248,6 +28446,18 @@
     },
     {
       "schema": "public",
+      "name": "rout_caller_has_admin_permission",
+      "args": "p_permission text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_caller_has_admin_permission(p_permission text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select public.rout_has_role(public.rout_current_user_id(), 'admin')\n      or exists (select 1 from public.admin_permissions p\n                  where p.user_id = public.rout_current_user_id() and p.permission = p_permission)\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_caller_is_admin",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_caller_is_admin()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (select 1 from public.user_roles r\n                  where r.user_id = public.rout_current_user_id() and r.role::text = 'admin')\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_card_design",
       "args": "s text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_card_design(s text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$ select cmf from public.card_designs where serial = s $function$"
@@ -28332,6 +28542,12 @@
     },
     {
       "schema": "public",
+      "name": "rout_has_role",
+      "args": "p_user uuid, p_role text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_has_role(p_user uuid, p_role text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select p_user is not null and exists (select 1 from public.user_roles r where r.user_id = p_user and r.role::text = p_role)\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_hw_consume_challenge",
       "args": "hid uuid, nh text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_hw_consume_challenge(hid uuid, nh text)\n RETURNS TABLE(public_key text, key_alg text, status text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if public.rout_card_status_by_hardware(hid) is distinct from 'active' then return; end if;\n  delete from public.hardware_challenges c where c.nonce_hash = nh and c.hardware_id = hid and c.expires_at > now();\n  if not found then return; end if;\n  return query select k.public_key, k.key_alg, k.status from public.physical_keys k\n    where k.hardware_id = hid and k.status = 'active';\nend $function$"
@@ -28356,9 +28572,21 @@
     },
     {
       "schema": "public",
+      "name": "rout_is_admin_member",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_is_admin_member(p_user uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select p_user is not null and (public.rout_has_role(p_user, 'admin')\n      or exists (select 1 from public.admin_permissions p where p.user_id = p_user))\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_is_workspace_member",
       "args": "ws uuid",
       "def": "CREATE OR REPLACE FUNCTION public.rout_is_workspace_member(ws uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$ select exists (select 1 from public.workspace_members m\n                       where m.workspace_id = ws and m.user_id = public.rout_current_user_id()) $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_like_literal",
+      "args": "p text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_like_literal(p text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n  select '%' || replace(replace(replace(p, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%'\n$function$"
     },
     {
       "schema": "public",
@@ -28377,6 +28605,204 @@
       "name": "rout_notify_omni_job",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_notify_omni_job()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n if new.status='queued' and (tg_op='INSERT' or old.status is distinct from new.status) then\n  perform pg_notify('new_omni_job', json_build_object('id',new.id)::text);\n end if;\n if tg_op='INSERT' or old.status is distinct from new.status then\n  perform pg_notify('omni_job_changed',json_build_object('id',new.id,'userId',new.user_id)::text);\n end if;\n return new;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_access_token_check",
+      "args": "p_hash text, p_subject text, p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_access_token_check(p_hash text, p_subject text, p_client text)\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select t.user_id from public.oauth_access_tokens t\n    join public.oauth_clients c on c.client_id = t.client_id\n    join public.users u on u.id = t.user_id\n    join public.oauth_consents g on g.user_id = t.user_id and g.client_id = t.client_id\n   where t.token_hash = p_hash and t.revoked_at is null and t.expires_at > now()\n     and t.subject = p_subject and t.client_id = p_client\n     and c.status = 'active' and not u.is_disabled and u.account_status = 'active' and g.revoked_at is null\n     and (t.family_id is null or not exists (select 1 from public.oauth_refresh_tokens r\n                                              where r.family_id = t.family_id and r.revoked_at is not null))\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_access_token_introspect",
+      "args": "p_hash text, p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_access_token_introspect(p_hash text, p_client text)\n RETURNS TABLE(expires_at timestamp with time zone, created_at timestamp with time zone, scopes text[], subject text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select t.expires_at, t.created_at, t.scopes, t.subject from public.oauth_access_tokens t\n    join public.oauth_clients c on c.client_id = t.client_id\n    join public.users u on u.id = t.user_id\n    join public.oauth_consents g on g.client_id = t.client_id and g.user_id = t.user_id\n   where t.token_hash = p_hash and t.client_id = p_client and t.revoked_at is null and t.expires_at > now()\n     and c.status = 'active' and not u.is_disabled and u.account_status = 'active' and g.revoked_at is null\n     and (t.family_id is null or not exists (select 1 from public.oauth_refresh_tokens f\n                                              where f.family_id = t.family_id and f.revoked_at is not null))\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_admin_app_decide",
+      "args": "p_id uuid, p_action text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_admin_app_decide(p_id uuid, p_action text)\n RETURNS TABLE(client_id text, name text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_client text; v_name text; v_actor uuid := public.rout_current_user_id();\nbegin\n  if not public.rout_caller_has_admin_permission('review_apps') then raise exception 'forbidden' using errcode = '42501'; end if;\n  if p_action not in ('approve', 'reject', 'block', 'unblock') then raise exception 'invalid_action' using errcode = '22023'; end if;\n  select c.client_id, c.name into v_client, v_name from public.oauth_clients c where c.id = p_id for update;\n  if not found then return; end if;\n  if p_action in ('approve', 'reject') then\n    update public.oauth_client_verification_requests v\n       set status = case when p_action = 'approve' then 'verified' else 'rejected' end,\n           reviewed_by = v_actor, reviewed_at = now()\n     where v.client_id = v_client and v.status = 'pending';\n    if not found then\n      insert into public.oauth_client_verification_requests (client_id, requested_by, note, status, reviewed_by, reviewed_at)\n      values (v_client, v_actor, 'Beslissing door admin', case when p_action = 'approve' then 'verified' else 'rejected' end, v_actor, now());\n    end if;\n  else\n    update public.oauth_clients c set status = case when p_action = 'block' then 'disabled' else 'active' end where c.id = p_id;\n    if p_action = 'block' then\n      update public.oauth_auth_codes a set consumed_at = now() where a.client_id = v_client and a.consumed_at is null;\n    end if;\n  end if;\n  return query select v_client, v_name;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_admin_apps",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_admin_apps()\n RETURNS TABLE(id uuid, client_id text, name text, redirect_uris text[], status text, created_at timestamp with time zone, owner_user_id uuid, owner_handle text, review_status text)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_caller_has_admin_permission('review_apps') then raise exception 'forbidden' using errcode = '42501'; end if;\n  return query select c.id, c.client_id, c.name, c.redirect_uris, c.status, c.created_at, c.owner_user_id,\n      p.username::text,\n      (select v.status from public.oauth_client_verification_requests v where v.client_id = c.client_id\n        order by v.created_at desc limit 1)\n    from public.oauth_clients c left join public.profiles p on p.id = c.owner_user_id\n   order by c.created_at desc limit 500;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_b64url_sha256",
+      "args": "p text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_b64url_sha256(p text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n  select pg_catalog.translate(pg_catalog.rtrim(pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p, 'UTF8')), 'base64'), '='), '+/', '-_')\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_can_manage",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_can_manage(p_client text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select public.rout_current_user_id() is not null and exists (\n    select 1 from public.oauth_clients c\n     where c.client_id = p_client\n       and ((c.workspace_id is null and c.owner_user_id = public.rout_current_user_id())\n         or (c.workspace_id is not null and exists (\n               select 1 from public.workspace_members m\n                where m.workspace_id = c.workspace_id and m.user_id = public.rout_current_user_id()\n                  and m.role::text in ('owner', 'admin', 'developer')))))\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_client_code_stats",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_client_code_stats(p_client text)\n RETURNS TABLE(total integer, failed integer)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_oauth_can_manage(p_client) then raise exception 'forbidden' using errcode = '42501'; end if;\n  return query select count(*)::int, (count(*) filter (where c.consumed_at is null and c.expires_at < now()))::int\n    from public.oauth_auth_codes c where c.client_id = p_client and c.created_at > now() - interval '30 days';\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_client_consent_count",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_client_consent_count(p_client text)\n RETURNS integer\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_oauth_can_manage(p_client) then raise exception 'forbidden' using errcode = '42501'; end if;\n  return (select count(*)::int from public.oauth_consents g where g.client_id = p_client);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_client_get",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_client_get(p_client text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select (pg_catalog.to_jsonb(c) - 'secret_hash' - 'backchannel_webhook_secret_sealed' - 'backchannel_webhook_secret_iv')\n         || pg_catalog.jsonb_build_object('has_secret', c.secret_hash is not null)\n    from public.oauth_clients c where c.client_id = p_client limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_client_secret_hash",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_client_secret_hash(p_client text)\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select c.secret_hash from public.oauth_clients c where c.client_id = p_client and c.status = 'active' limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_client_verified",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_client_verified(p_client text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (select 1 from public.oauth_client_verification_requests v where v.client_id = p_client and v.status = 'verified')\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_code_consume",
+      "args": "p_code_hash text, p_client text, p_redirect text, p_verifier text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_code_consume(p_code_hash text, p_client text, p_redirect text, p_verifier text)\n RETURNS TABLE(result text, user_id uuid, scopes text[], nonce text, acr text, auth_time timestamp with time zone, rich_identity boolean, redirect_uri text, has_pkce boolean)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare r public.oauth_auth_codes%rowtype;\nbegin\n  update public.oauth_auth_codes c set consumed_at = now()\n   where c.code_hash = p_code_hash and c.consumed_at is null and c.expires_at > now()\n  returning c.* into r;\n  if not found then\n    return query select 'invalid'::text, null::uuid, null::text[], null::text, null::text, null::timestamptz, null::boolean, null::text, null::boolean;\n    return;\n  end if;\n  if r.client_id is distinct from p_client then\n    return query select 'client_mismatch'::text, null::uuid, null::text[], null::text, null::text, null::timestamptz, null::boolean, null::text, null::boolean;\n    return;\n  end if;\n  if r.redirect_uri is distinct from p_redirect then\n    return query select 'redirect_mismatch'::text, null::uuid, null::text[], null::text, null::text, null::timestamptz, null::boolean, r.redirect_uri, null::boolean;\n    return;\n  end if;\n  if coalesce(r.code_challenge, '') <> '' then\n    if coalesce(p_verifier, '') = '' then\n      return query select 'pkce_missing'::text, null::uuid, null::text[], null::text, null::text, null::timestamptz, null::boolean, null::text, true;\n      return;\n    end if;\n    if public.rout_oauth_b64url_sha256(p_verifier) <> r.code_challenge then\n      return query select 'pkce_failed'::text, null::uuid, null::text[], null::text, null::text, null::timestamptz, null::boolean, null::text, true;\n      return;\n    end if;\n  end if;\n  return query select 'ok'::text, r.user_id, r.scopes, r.nonce, r.acr, r.auth_time, r.rich_identity, r.redirect_uri,\n    coalesce(r.code_challenge, '') <> '';\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_code_issue",
+      "args": "p_code_hash text, p_client text, p_redirect text, p_scopes text[], p_challenge text, p_nonce text, p_acr text, p_rich boolean, p_ttl_seconds integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_code_issue(p_code_hash text, p_client text, p_redirect text, p_scopes text[], p_challenge text, p_nonce text, p_acr text, p_rich boolean, p_ttl_seconds integer)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null then raise exception 'forbidden' using errcode = '42501'; end if;\n  if p_code_hash is null or pg_catalog.length(p_code_hash) not between 20 and 200 then return false; end if;\n  if not exists (select 1 from public.oauth_clients c where c.client_id = p_client and c.status = 'active'\n                   and p_redirect = any (c.redirect_uris)) then\n    return false;\n  end if;\n  insert into public.oauth_auth_codes (code_hash, client_id, user_id, redirect_uri, scopes, code_challenge,\n    nonce, expires_at, acr, rich_identity)\n  values (p_code_hash, p_client, v_user, p_redirect, coalesce(p_scopes, '{}'), coalesce(p_challenge, ''),\n    p_nonce, now() + pg_catalog.make_interval(secs => least(greatest(coalesce(p_ttl_seconds, 60), 1), 600)),\n    p_acr, coalesce(p_rich, false));\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_consent_active",
+      "args": "p_user uuid, p_client text, p_scope text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_consent_active(p_user uuid, p_client text, p_scope text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select exists (select 1 from public.oauth_consents g join public.oauth_clients c on c.client_id = g.client_id\n                  where g.user_id = p_user and g.client_id = p_client and g.revoked_at is null and c.status = 'active'\n                    and (p_scope is null or p_scope = any (g.scopes)))\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_consent_grant",
+      "args": "p_client text, p_scopes text[]",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_consent_grant(p_client text, p_scopes text[])\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null then raise exception 'forbidden' using errcode = '42501'; end if;\n  if not exists (select 1 from public.oauth_clients c where c.client_id = p_client and c.status = 'active') then\n    return false;\n  end if;\n  insert into public.oauth_consents (user_id, client_id, scopes)\n  values (v_user, p_client, coalesce(p_scopes, '{}'))\n  on conflict (user_id, client_id) do update set\n    scopes = case when public.oauth_consents.revoked_at is null\n      then array(select distinct x from unnest(public.oauth_consents.scopes || excluded.scopes) as x order by x)\n      else excluded.scopes end,\n    granted_at = now(), revoked_at = null;\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_debug_activity",
+      "args": "p_clients text[]",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_debug_activity(p_clients text[])\n RETURNS TABLE(id uuid, client_id text, endpoint text, outcome text, error_code text, detail jsonb, created_at timestamp with time zone)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select e.id, e.client_id, e.endpoint, e.outcome, e.error_code, e.detail, e.created_at\n    from public.oauth_debug_events e\n   where e.client_id = any (p_clients) and public.rout_oauth_can_manage(e.client_id)\n     and e.created_at > now() - interval '7 days'\n   order by e.created_at desc, e.id desc limit 50\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_debug_list",
+      "args": "p_client text, p_errors_only boolean",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_debug_list(p_client text, p_errors_only boolean)\n RETURNS TABLE(id uuid, client_id text, endpoint text, outcome text, error_code text, detail jsonb, created_at timestamp with time zone)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_oauth_can_manage(p_client) then raise exception 'forbidden' using errcode = '42501'; end if;\n  return query select e.id, e.client_id, e.endpoint, e.outcome, e.error_code, e.detail, e.created_at\n    from public.oauth_debug_events e\n   where e.client_id = p_client and (not coalesce(p_errors_only, false) or e.outcome = 'error')\n     and e.created_at > now() - interval '7 days'\n   order by e.created_at desc limit 100;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_debug_log",
+      "args": "p_client text, p_endpoint text, p_outcome text, p_error text, p_detail jsonb",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_debug_log(p_client text, p_endpoint text, p_outcome text, p_error text, p_detail jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_endpoint not in ('authorize', 'token', 'userinfo') or p_outcome not in ('success', 'error')\n     or p_client is null or pg_catalog.length(p_client) > 100\n     or pg_catalog.octet_length(coalesce(p_detail, '{}'::jsonb)::text) > 4000\n     or not exists (select 1 from public.oauth_clients c where c.client_id = p_client) then\n    return;\n  end if;\n  insert into public.oauth_debug_events (client_id, endpoint, outcome, error_code, detail)\n  values (p_client, p_endpoint, p_outcome, left(p_error, 100), coalesce(p_detail, '{}'::jsonb));\n  if pg_catalog.random() < 0.02 then\n    delete from public.oauth_debug_events e where e.created_at < now() - interval '7 days';\n  end if;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_email_webhook_targets",
+      "args": "p_clients text[]",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_email_webhook_targets(p_clients text[])\n RETURNS TABLE(client_id text, url text, secret_sealed text, secret_iv text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select c.client_id, c.backchannel_webhook_url, c.backchannel_webhook_secret_sealed, c.backchannel_webhook_secret_iv\n    from public.oauth_clients c\n   where c.client_id = any (p_clients) and c.backchannel_webhook_url is not null\n     and exists (select 1 from public.oauth_consents k\n                  where k.user_id = public.rout_current_user_id() and k.client_id = c.client_id\n                    and k.revoked_at is null and 'email' = any (k.scopes))\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_refresh_token_introspect",
+      "args": "p_hash text, p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_refresh_token_introspect(p_hash text, p_client text)\n RETURNS TABLE(user_id uuid, scopes text[], expires_at timestamp with time zone)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select r.user_id, r.scopes, r.expires_at from public.oauth_refresh_tokens r\n    join public.oauth_clients c on c.client_id = r.client_id\n    join public.users u on u.id = r.user_id\n    join public.oauth_consents g on g.client_id = r.client_id and g.user_id = r.user_id\n   where r.token_hash = p_hash and r.client_id = p_client and r.used_at is null and r.revoked_at is null\n     and r.expires_at > now() and c.status = 'active' and not u.is_disabled and u.account_status = 'active'\n     and g.revoked_at is null\n     and not exists (select 1 from public.oauth_refresh_tokens f where f.family_id = r.family_id and f.revoked_at is not null)\n   limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_signing_key_retire_legacy",
+      "args": "p_kid text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_signing_key_retire_legacy(p_kid text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  update public.oauth_signing_keys k set private_jwk = null, retired_at = coalesce(k.retired_at, now())\n   where k.kid = p_kid and k.private_jwk is not null;\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_signing_key_rotate",
+      "args": "p_kid text, p_public jsonb, p_sealed text, p_iv text, p_fingerprint text, p_alg text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_signing_key_rotate(p_kid text, p_public jsonb, p_sealed text, p_iv text, p_fingerprint text, p_alg text)\n RETURNS timestamp with time zone\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_created timestamptz;\nbegin\n  if p_kid is null or p_public is null or p_sealed is null or p_iv is null or p_alg is distinct from 'ES256'\n     or p_public ? 'd' then\n    raise exception 'invalid_signing_key' using errcode = '22023';\n  end if;\n  insert into public.oauth_signing_keys (kid, private_jwk, public_jwk, private_jwk_sealed, private_jwk_iv, kek_fingerprint, alg)\n  values (p_kid, null, p_public, p_sealed, p_iv, p_fingerprint, p_alg)\n  returning created_at into v_created;\n  update public.oauth_signing_keys k set retired_at = now()\n   where k.retired_at is null and k.kid <> p_kid and k.created_at <= v_created;\n  return v_created;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_signing_keys_list",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_signing_keys_list()\n RETURNS TABLE(kid text, created_at timestamp with time zone, retired_at timestamp with time zone, revoked_at timestamp with time zone, public_jwk jsonb, private_jwk jsonb, private_jwk_sealed text, private_jwk_iv text, kek_fingerprint text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select k.kid, k.created_at, k.retired_at, k.revoked_at, k.public_jwk, k.private_jwk, k.private_jwk_sealed,\n         k.private_jwk_iv, k.kek_fingerprint\n    from public.oauth_signing_keys k order by k.created_at desc\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_signing_keys_wipe",
+      "args": "p_kids text[]",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_signing_keys_wipe(p_kids text[])\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare n integer;\nbegin\n  update public.oauth_signing_keys k set private_jwk = null, private_jwk_sealed = null, private_jwk_iv = null\n   where k.kid = any (p_kids) and (k.retired_at is not null or k.revoked_at is not null);\n  get diagnostics n = row_count;\n  return n;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_test_user_add",
+      "args": "p_client text, p_identifier text, p_max integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_test_user_add(p_client text, p_identifier text, p_max integer)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_id text := pg_catalog.lower(pg_catalog.btrim(p_identifier));\nbegin\n  if not public.rout_oauth_can_manage(p_client) then raise exception 'forbidden' using errcode = '42501'; end if;\n  if v_id is null or pg_catalog.length(v_id) not between 1 and 320 then return 'invalid'; end if;\n  perform 1 from public.oauth_clients c where c.client_id = p_client for update;\n  if (select count(*) from public.oauth_client_test_users t where t.client_id = p_client)\n     >= least(greatest(coalesce(p_max, 10), 1), 100) then\n    return 'limit';\n  end if;\n  insert into public.oauth_client_test_users (client_id, identifier) values (p_client, v_id) on conflict do nothing;\n  return 'ok';\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_test_user_remove",
+      "args": "p_client text, p_identifier text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_test_user_remove(p_client text, p_identifier text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_oauth_can_manage(p_client) then raise exception 'forbidden' using errcode = '42501'; end if;\n  delete from public.oauth_client_test_users t where t.client_id = p_client and t.identifier = pg_catalog.lower(pg_catalog.btrim(p_identifier));\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_test_users_list",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_test_users_list(p_client text)\n RETURNS SETOF text\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_oauth_can_manage(p_client) then raise exception 'forbidden' using errcode = '42501'; end if;\n  return query select t.identifier from public.oauth_client_test_users t where t.client_id = p_client order by t.created_at;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_token_revoke",
+      "args": "p_hash text, p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_token_revoke(p_hash text, p_client text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  update public.oauth_access_tokens t set revoked_at = coalesce(t.revoked_at, now())\n   where t.token_hash = p_hash and t.client_id = p_client;\n  update public.oauth_refresh_tokens r set revoked_at = coalesce(r.revoked_at, now())\n   where r.client_id = p_client and r.family_id in (select f.family_id from public.oauth_refresh_tokens f\n                                                    where f.token_hash = p_hash and f.client_id = p_client);\n  update public.oauth_access_tokens t set revoked_at = coalesce(t.revoked_at, now())\n   where t.client_id = p_client and t.family_id in (select f.family_id from public.oauth_refresh_tokens f\n                                                    where f.token_hash = p_hash and f.client_id = p_client);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_user_may_use",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_user_may_use(p_client text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select public.rout_current_user_id() is not null and exists (\n    select 1 from public.oauth_clients c\n     where c.client_id = p_client and c.status = 'active'\n       and (c.publishing_status = 'production'\n         or (c.owner_user_id is null and c.workspace_id is null)\n         or c.owner_user_id = public.rout_current_user_id()\n         or (c.workspace_id is not null and exists (\n               select 1 from public.workspace_members m\n                where m.workspace_id = c.workspace_id and m.user_id = public.rout_current_user_id()\n                  and m.role::text in ('owner', 'admin', 'developer')))\n         or exists (\n               select 1 from public.oauth_client_test_users t\n                where t.client_id = c.client_id\n                  and (t.identifier = (select pg_catalog.lower(u.email) from public.users u where u.id = public.rout_current_user_id())\n                    or t.identifier in (select pg_catalog.lower(p.username) from public.profiles p\n                                         where p.id = public.rout_current_user_id()\n                                           and p.username is not null)))))\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_verification_latest",
+      "args": "p_client text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_verification_latest(p_client text)\n RETURNS TABLE(status text, created_at timestamp with time zone, reviewed_at timestamp with time zone)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_oauth_can_manage(p_client) then raise exception 'forbidden' using errcode = '42501'; end if;\n  return query select v.status, v.created_at, v.reviewed_at from public.oauth_client_verification_requests v\n    where v.client_id = p_client order by v.created_at desc limit 1;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_verification_pending",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_verification_pending()\n RETURNS TABLE(id uuid, client_id text, note text, created_at timestamp with time zone, name text, homepage_url text, privacy_url text, support_email text, legal_owner text)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_caller_has_admin_permission('review_apps') then raise exception 'forbidden' using errcode = '42501'; end if;\n  return query select r.id, r.client_id, r.note, r.created_at, c.name, c.homepage_url, c.privacy_url, c.support_email, c.legal_owner\n    from public.oauth_client_verification_requests r join public.oauth_clients c on c.client_id = r.client_id\n   where r.status = 'pending' order by r.created_at;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_verification_request",
+      "args": "p_client text, p_note text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_verification_request(p_client text, p_note text)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_oauth_can_manage(p_client) then raise exception 'forbidden' using errcode = '42501'; end if;\n  perform 1 from public.oauth_clients c where c.client_id = p_client for update;\n  if exists (select 1 from public.oauth_client_verification_requests v\n              where v.client_id = p_client and v.status in ('pending', 'verified')) then\n    return 'exists';\n  end if;\n  insert into public.oauth_client_verification_requests (client_id, requested_by, note)\n  values (p_client, public.rout_current_user_id(), nullif(left(p_note, 2000), ''));\n  return 'ok';\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_oauth_verification_review",
+      "args": "p_request uuid, p_approve boolean",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_oauth_verification_review(p_request uuid, p_approve boolean)\n RETURNS TABLE(name text, owner_user_id uuid)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_caller_has_admin_permission('review_apps') then raise exception 'forbidden' using errcode = '42501'; end if;\n  return query\n    with done as (\n      update public.oauth_client_verification_requests v\n         set status = case when p_approve then 'verified' else 'rejected' end,\n             reviewed_by = public.rout_current_user_id(), reviewed_at = now()\n       where v.id = p_request and v.status = 'pending'\n      returning v.client_id)\n    select c.name, c.owner_user_id from done join public.oauth_clients c on c.client_id = done.client_id;\nend $function$"
     },
     {
       "schema": "public",
@@ -28425,6 +28851,54 @@
       "name": "rout_parent_set_qa_level",
       "args": "p_token_hash text, p_level qa_permission_level",
       "def": "CREATE OR REPLACE FUNCTION public.rout_parent_set_qa_level(p_token_hash text, p_level qa_permission_level)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare v_user uuid;\nbegin\n  select user_id into v_user from public.parent_authorizations\n   where token = p_token_hash and action_type = 'consent' and (status = 'approved' or (status = 'pending' and expires_at > now()));\n  if v_user is null then return false; end if;\n  update public.users set qa_permission_level = p_level where id = v_user;\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_phone_admin_approve",
+      "args": "p_code_id uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_phone_admin_approve(p_code_id uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_row public.phone_otp_codes%rowtype;\nbegin\n  if not public.rout_caller_is_admin() then raise exception 'forbidden' using errcode = '42501'; end if;\n  update public.phone_otp_codes set consumed_at = now()\n   where id = p_code_id and consumed_at is null and expires_at > now()\n  returning * into v_row;\n  if not found then return false; end if;\n  perform public.rout_phone_mark_verified(v_row);\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_phone_code_cancel",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_phone_code_cancel(p_user uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null or p_user is distinct from v_user then return; end if;\n  update public.phone_otp_codes set consumed_at = now() where user_id = v_user and consumed_at is null;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_phone_code_issue",
+      "args": "p_user uuid, p_phone_hash text, p_phone_enc text, p_last4 text, p_code_hash text, p_expires_at timestamp with time zone",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_phone_code_issue(p_user uuid, p_phone_hash text, p_phone_enc text, p_last4 text, p_code_hash text, p_expires_at timestamp with time zone)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null or p_user is distinct from v_user then return 'no_context'; end if;\n  if p_phone_hash is null or p_phone_hash !~ '^[0-9a-f]{64}$' or p_code_hash is null or p_code_hash !~ '^[0-9a-f]{64}$'\n     or p_phone_enc is null or length(p_phone_enc) not between 16 and 512 or p_last4 is null or p_last4 !~ '^[0-9]{4}$'\n     or p_expires_at is null or p_expires_at <= now() or p_expires_at > now() + interval '15 minutes' then\n    return 'invalid';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('rout.phone_code:' || v_user::text, 0));\n  perform pg_advisory_xact_lock(hashtextextended('rout.phone_code:' || p_phone_hash, 0));\n  if (select count(*) from public.phone_otp_codes where user_id = v_user and created_at > now() - interval '1 hour') >= 5\n     or (select count(*) from public.phone_otp_codes where phone_hash = p_phone_hash and created_at > now() - interval '1 hour') >= 3 then\n    return 'rate_limited';\n  end if;\n  update public.phone_otp_codes set consumed_at = now() where user_id = v_user and consumed_at is null;\n  insert into public.phone_otp_codes (user_id, phone_hash, phone_number_enc, phone_last4, code_hash, expires_at)\n  values (v_user, p_phone_hash, p_phone_enc, p_last4, p_code_hash, p_expires_at);\n  return 'ok';\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_phone_code_verify",
+      "args": "p_user uuid, p_code_hash text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_phone_code_verify(p_user uuid, p_code_hash text)\n RETURNS TABLE(status text, last4 text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare\n  v_user uuid := public.rout_current_user_id();\n  v_row public.phone_otp_codes%rowtype;\nbegin\n  if v_user is null or p_user is distinct from v_user then return query select 'no_code'::text, null::text; return; end if;\n  select * into v_row from public.phone_otp_codes where user_id = v_user and consumed_at is null\n   order by created_at desc limit 1 for update;\n  if not found then return query select 'no_code'::text, null::text; return; end if;\n  if v_row.expires_at <= now() then return query select 'expired'::text, null::text; return; end if;\n  if v_row.attempts >= 5 then return query select 'too_many_attempts'::text, null::text; return; end if;\n  if p_code_hash is null or v_row.code_hash is distinct from p_code_hash then\n    update public.phone_otp_codes set attempts = attempts + 1 where id = v_row.id;\n    return query select 'invalid'::text, null::text; return;\n  end if;\n  update public.phone_otp_codes set consumed_at = now() where id = v_row.id;\n  perform public.rout_phone_mark_verified(v_row);\n  return query select 'verified'::text, v_row.phone_last4;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_phone_inbound_candidate",
+      "args": "p_phone_hash text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_phone_inbound_candidate(p_phone_hash text)\n RETURNS TABLE(code_id uuid, user_id uuid)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select c.id, c.user_id from public.phone_otp_codes c\n   where p_phone_hash ~ '^[0-9a-f]{64}$' and c.phone_hash = p_phone_hash\n     and c.consumed_at is null and c.expires_at > now() and c.attempts < 5\n   order by c.created_at desc limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_phone_inbound_confirm",
+      "args": "p_code_id uuid, p_phone_hash text, p_code_hash text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_phone_inbound_confirm(p_code_id uuid, p_phone_hash text, p_code_hash text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_row public.phone_otp_codes%rowtype;\nbegin\n  select * into v_row from public.phone_otp_codes\n   where id = p_code_id and phone_hash = p_phone_hash and consumed_at is null and expires_at > now() and attempts < 5\n   for update;\n  if not found then return false; end if;\n  if p_code_hash is null or v_row.code_hash is distinct from p_code_hash then\n    update public.phone_otp_codes set attempts = attempts + 1 where id = v_row.id;\n    return false;\n  end if;\n  update public.phone_otp_codes set consumed_at = now() where id = v_row.id;\n  perform public.rout_phone_mark_verified(v_row);\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_phone_mark_verified",
+      "args": "p_row phone_otp_codes",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_phone_mark_verified(p_row phone_otp_codes)\n RETURNS void\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  insert into public.user_phone_numbers (user_id, phone_number_enc, phone_hash, phone_last4, phone_verified, phone_verified_at)\n  values (p_row.user_id, p_row.phone_number_enc, p_row.phone_hash, p_row.phone_last4, true, now())\n  on conflict (user_id) do update set phone_number_enc = excluded.phone_number_enc, phone_hash = excluded.phone_hash,\n    phone_last4 = excluded.phone_last4, phone_verified = true, phone_verified_at = now(), updated_at = now()\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_phone_pending_list",
+      "args": "p_limit integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_phone_pending_list(p_limit integer)\n RETURNS TABLE(id uuid, phone_last4 text, created_at timestamp with time zone, attempts integer)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if not public.rout_caller_is_admin() then raise exception 'forbidden' using errcode = '42501'; end if;\n  return query select c.id, c.phone_last4, c.created_at, c.attempts from public.phone_otp_codes c\n    where c.consumed_at is null and c.expires_at > now()\n    order by c.created_at desc limit least(greatest(coalesce(p_limit, 50), 1), 200);\nend $function$"
     },
     {
       "schema": "public",
@@ -28644,6 +29118,30 @@
     },
     {
       "schema": "public",
+      "name": "rout_reviewer_admin_id",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_reviewer_admin_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select r.user_id from public.user_roles r where r.role::text = 'admin' order by r.user_id limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_security_code_consume",
+      "args": "p_user uuid, p_purpose text, p_code_hash text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_security_code_consume(p_user uuid, p_purpose text, p_code_hash text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare\n  v_user uuid := public.rout_current_user_id();\n  v_row public.security_codes%rowtype;\nbegin\n  if v_user is null or p_user is distinct from v_user or p_purpose is null or p_code_hash is null then return false; end if;\n  select * into v_row from public.security_codes\n   where user_id = v_user and purpose = p_purpose and consumed_at is null and expires_at > now()\n   order by created_at desc limit 1 for update;\n  if not found or v_row.attempts >= 5 then return false; end if;\n  if v_row.code_hash is distinct from p_code_hash then\n    update public.security_codes set attempts = attempts + 1 where id = v_row.id;\n    return false;\n  end if;\n  update public.security_codes set consumed_at = now() where id = v_row.id and consumed_at is null;\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_security_code_issue",
+      "args": "p_user uuid, p_purpose text, p_code_hash text, p_ttl_minutes integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_security_code_issue(p_user uuid, p_purpose text, p_code_hash text, p_ttl_minutes integer)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_user uuid := public.rout_current_user_id();\nbegin\n  if v_user is null or p_user is distinct from v_user then return 'no_context'; end if;\n  if p_purpose is null or p_purpose not in ('merge', 'password', 'two_factor', 'workspace_convert',\n       'delete_account', 'identity_link', 'step_up', 'step_up_sms')\n     or p_code_hash is null or p_code_hash !~ '^[A-Za-z0-9+/]{43}=$'\n     or p_ttl_minutes is null or p_ttl_minutes not between 1 and 15 then\n    return 'invalid';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('rout.security_code:' || v_user::text || ':' || p_purpose, 0));\n  if (select count(*) from public.security_codes\n       where user_id = v_user and purpose = p_purpose and created_at > now() - interval '15 minutes') >= 5 then\n    return 'rate_limited';\n  end if;\n  update public.security_codes set consumed_at = now()\n   where user_id = v_user and purpose = p_purpose and consumed_at is null;\n  insert into public.security_codes (user_id, purpose, code_hash, expires_at)\n  values (v_user, p_purpose, p_code_hash, now() + make_interval(mins => p_ttl_minutes));\n  return 'ok';\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_security_code_purge",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_security_code_purge()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare n integer;\nbegin\n  delete from public.security_codes\n   where expires_at < now() - interval '30 minutes' or consumed_at < now() - interval '30 minutes';\n  get diagnostics n = row_count;\n  return n;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_shadow_mute_trust",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_shadow_mute_trust()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_score integer;\n  v_new integer;\n  v_start timestamptz := now() + make_interval(mins => 720 + floor(random() * 2161)::int);\nbegin\n  if new.muted_sender_id is not null then\n    insert into public.qa_trust_charges (recipient_id, sender_user_id) values (new.recipient_id, new.muted_sender_id)\n    on conflict (recipient_id, sender_user_id) where sender_user_id is not null do nothing;\n    get diagnostics v_new = row_count;\n    if v_new = 0 then return new; end if;\n    update public.users u\n       set trust_score = greatest(0, u.trust_score - 20)\n     where u.id = new.muted_sender_id\n     returning u.trust_score into v_score;\n    if v_score is not null and v_score < 50 then\n      update public.users u\n         set global_shadow_ban_starts_at = v_start,\n             global_shadow_ban_until = v_start + interval '7 days'\n       where u.id = new.muted_sender_id\n         and (u.global_shadow_ban_until is null or u.global_shadow_ban_until < now());\n    end if;\n  elsif new.muted_sender_key is not null then\n    insert into public.qa_trust_charges (recipient_id, sender_key) values (new.recipient_id, new.muted_sender_key)\n    on conflict (recipient_id, sender_key) where sender_key is not null do nothing;\n    get diagnostics v_new = row_count;\n    if v_new = 0 then return new; end if;\n    insert into public.qa_guest_trust as g (sender_key, trust_score)\n         values (new.muted_sender_key, 80)\n    on conflict (sender_key) do update\n         set trust_score = greatest(0, g.trust_score - 20), updated_at = now()\n    returning g.trust_score into v_score;\n    if v_score < 50 then\n      update public.qa_guest_trust g\n         set ban_starts_at = v_start, ban_until = v_start + interval '7 days', updated_at = now()\n       where g.sender_key = new.muted_sender_key\n         and (g.ban_until is null or g.ban_until < now());\n    end if;\n  end if;\n  return new;\nend $function$"
@@ -28695,6 +29193,12 @@
       "name": "rout_user_is_minor",
       "args": "p_user_id uuid",
       "def": "CREATE OR REPLACE FUNCTION public.rout_user_is_minor(p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select coalesce((select u.date_of_birth > (current_date - interval '16 years') from public.users u where u.id = p_user_id), false)\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_user_role_ensure_member",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_user_role_ensure_member()\n RETURNS void\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  insert into public.user_roles (user_id, role)\n  select public.rout_current_user_id(), 'user'::public.app_role\n   where public.rout_current_user_id() is not null\n  on conflict (user_id, role) do nothing\n$function$"
     },
     {
       "schema": "public",

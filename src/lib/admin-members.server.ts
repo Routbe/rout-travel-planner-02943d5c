@@ -74,12 +74,8 @@ export async function setMemberStatus(adminId: string, userId: string, status: S
 }
 
 export async function listOAuthApps() {
-  const rows = (await sql`select c.id, c.client_id, c.name, c.redirect_uris, c.status, c.created_at, c.owner_user_id,
-      p.username as owner_handle,
-      (select v.status from public.oauth_client_verification_requests v where v.client_id = c.client_id
-         order by v.created_at desc limit 1) as review_status
-    from public.oauth_clients c left join public.profiles p on p.id = c.owner_user_id
-    order by c.created_at desc limit 500`) as Row[];
+  // All apps are visible only through the admin-gated database function (db/0228).
+  const rows = (await sql`select * from public.rout_oauth_admin_apps()`) as Row[];
   return rows.map((r) => ({
     id: String(r["id"]),
     clientId: String(r["client_id"]),
@@ -93,23 +89,10 @@ export async function listOAuthApps() {
 }
 
 export async function actOnOAuthApp(adminId: string, id: string, action: "approve" | "reject" | "block" | "unblock") {
-  const c = ((await sql`select client_id, name from public.oauth_clients where id = ${id} limit 1`) as Row[])[0];
+  // One admin-gated database step (db/0228); blocking also burns open codes.
+  const c = ((await sql`select * from public.rout_oauth_admin_app_decide(${id}::uuid, ${action})`) as Row[])[0];
   if (!c) throw new Error("App niet gevonden.");
   const clientId = String(c["client_id"]);
-  if (action === "approve" || action === "reject") {
-    const status = action === "approve" ? "verified" : "rejected";
-    const open = (await sql`update public.oauth_client_verification_requests set status = ${status},
-        reviewed_by = ${adminId}, reviewed_at = now() where client_id = ${clientId} and status = 'pending' returning id`) as Row[];
-    if (open.length === 0) {
-      await sql`insert into public.oauth_client_verification_requests (client_id, requested_by, note, status, reviewed_by, reviewed_at)
-        values (${clientId}, ${adminId}, 'Beslissing door admin', ${status}, ${adminId}, now())`;
-    }
-  } else {
-    await sql`update public.oauth_clients set status = ${action === "block" ? "disabled" : "active"} where id = ${id}`;
-    if (action === "block") {
-      await sql`update public.oauth_auth_codes set consumed_at = now() where client_id = ${clientId} and consumed_at is null`.catch(() => undefined);
-    }
-  }
   await writeAudit({ adminId, action: `oauth_app_${action}`, targetLabel: `${String(c["name"])} (${clientId})` });
   return { ok: true as const };
 }

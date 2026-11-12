@@ -24,9 +24,7 @@ export const Route = createFileRoute("/api_/public/oauth/picture")({
             select o.content_type, o.data
               from public.avatar_objects o
              where o.path = ${target.path}
-               and exists (select 1 from public.oauth_consents g join public.oauth_clients c on c.client_id = g.client_id
-                            where g.user_id = ${target.userId} and g.client_id = ${clientId}
-                              and g.revoked_at is null and c.status = 'active')
+               and public.rout_oauth_consent_active(${target.userId}::uuid, ${clientId}, null)
              limit 1`) as { content_type: string; data: string }[];
           const row = rows[0];
           if (!row) return notFound();

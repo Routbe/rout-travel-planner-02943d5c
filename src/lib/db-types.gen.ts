@@ -206,6 +206,11 @@ export interface PublicAdminBootstrapTokensRow {
   "consumed_at": string | Date;
 }
 
+export interface PublicAdminOwnerEmailsRow {
+  "email": string;
+  "created_at": string | Date;
+}
+
 export interface PublicAdminPermissionsRow {
   "id": string;
   "user_id": string;
@@ -2557,6 +2562,7 @@ export interface DbTables {
   "public.account_merge_tickets": PublicAccountMergeTicketsRow;
   "public.admin_audit_log": PublicAdminAuditLogRow;
   "public.admin_bootstrap_tokens": PublicAdminBootstrapTokensRow;
+  "public.admin_owner_emails": PublicAdminOwnerEmailsRow;
   "public.admin_permissions": PublicAdminPermissionsRow;
   "public.agent_audit_logs": PublicAgentAuditLogsRow;
   "public.agent_sandboxes": PublicAgentSandboxesRow;

@@ -277,17 +277,14 @@ export const reviewAppVerificationRequest = createServerFn({ method: "POST" })
     const { assertAdminRole } = await import("@/lib/admin.server");
     await assertAdminRole(context.userId);
     const { reviewVerification } = await import("./provider.server");
-    await reviewVerification(context.userId, data.requestId, data.approve);
+    const reviewed = await reviewVerification(context.userId, data.requestId, data.approve);
     const { later, recipient, sendSiteMail, siteOrigin } = await import("@/lib/site-mail.server");
     later(async () => {
-      const { sql } = await import("@/lib/neon");
-      const rows = (await sql`select c.name, c.owner_user_id from public.oauth_client_verification_requests v
-        join public.oauth_clients c on c.client_id = v.client_id where v.id = ${data.requestId} limit 1`) as Record<string, unknown>[];
-      const owner = rows[0]?.["owner_user_id"];
+      const owner = reviewed?.ownerUserId;
       if (typeof owner !== "string") return;
       const r = await recipient(owner);
       const { appReviewMail } = await import("@/emails/site-mails");
-      await sendSiteMail(r.email, appReviewMail({ lang: r.lang, name: r.name, app: String(rows[0]?.["name"] ?? "je app"), approved: data.approve, consoleUrl: `${siteOrigin()}/developers` }), ["console", "app-review"]);
+      await sendSiteMail(r.email, appReviewMail({ lang: r.lang, name: r.name, app: reviewed?.name || "je app", approved: data.approve, consoleUrl: `${siteOrigin()}/developers` }), ["console", "app-review"]);
     });
     return { ok: true };
   });
