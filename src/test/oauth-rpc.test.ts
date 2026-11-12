@@ -103,8 +103,9 @@ beforeAll(async () => {
         with check (user_id::text = current_setting('rout.user_id', true));`);
   }
   await db.exec("grant select on public.oauth_clients, public.users, public.profiles to rout_app; alter table public.oauth_clients enable row level security; create policy rout_owner on public.oauth_clients to rout_app using (owner_user_id = public.rout_current_user_id());");
-  for (const f of ["0228_oauth_rpc.sql", "0230_oauth_lockdown.sql"]) {
-    await db.exec(readFileSync(new URL(`../../db/${f}`, import.meta.url), "utf8"));
+  // 0230 waits in db-pending/ until the deployed code uses the 0228 functions.
+  for (const f of ["db/0228_oauth_rpc.sql", "db-pending/0230_oauth_lockdown.sql"]) {
+    await db.exec(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"));
   }
 }, 30_000);
 afterAll(async () => db?.close());
