@@ -267,15 +267,14 @@ export async function setSuspension(opts: {
     .eq("id", opts.userId);
   if (error) return { ok: false as const, reason: error.message };
 
-  await dbAdmin.from("security_events").insert({
-    user_id: opts.userId,
+  await (await import("./security-events.server")).writeSecurityEvent({
+    userId: opts.userId,
     kind: opts.suspended ? "profile_suspended" : "profile_reinstated",
     severity: opts.suspended ? "warning" : "info",
     message: opts.suspended
       ? "Your ROUT profile has been suspended by moderation."
       : "Your ROUT profile is live again.",
-    details: { reason: opts.reason ?? null, admin_id: opts.adminId, notify: "email" },
-  });
+    details: { reason: opts.reason ?? null, admin_id: opts.adminId, notify: "email" },});
 
   await writeAudit({
     adminId: opts.adminId,
@@ -395,8 +394,8 @@ export async function changeHandle(opts: {
 
   const reason = opts.reason?.trim() || null;
 
-  await dbAdmin.from("security_events").insert({
-    user_id: opts.userId,
+  await (await import("./security-events.server")).writeSecurityEvent({
+    userId: opts.userId,
     kind: "handle_changed_by_admin",
     severity: "warning",
     message: `Your handle is now @${handle}.`,
@@ -406,8 +405,7 @@ export async function changeHandle(opts: {
       vip: Boolean(grant),
       admin_id: opts.adminId,
       reason,
-    },
-  });
+    },});
 
   await writeAudit({
     adminId: opts.adminId,
@@ -709,15 +707,14 @@ export async function markUserPaid(opts: {
   await enqueueAliasJob(opts.userId, opts.paid ? "provision" : "delete");
   const sync = await drainAliasSyncQueue(5);
 
-  await dbAdmin.from("security_events").insert({
-    user_id: opts.userId,
+  await (await import("./security-events.server")).writeSecurityEvent({
+    userId: opts.userId,
     kind: opts.paid ? "manual_payment_verified" : "manual_payment_revoked",
     severity: "info",
     message: opts.paid
       ? "Your Early Believer status is active — your @rout.be alias is being created."
       : "Your Early Believer status was revoked.",
-    details: { admin_id: opts.adminId, note: opts.note ?? null },
-  });
+    details: { admin_id: opts.adminId, note: opts.note ?? null },});
 
   await writeAudit({
     adminId: opts.adminId,
@@ -1175,13 +1172,12 @@ export async function revokeVipGrant(opts: {
     .eq("id", opts.userId);
   if (error) return { ok: false as const, reason: error.message };
 
-  await dbAdmin.from("security_events").insert({
-    user_id: opts.userId,
+  await (await import("./security-events.server")).writeSecurityEvent({
+    userId: opts.userId,
     kind: "vip_handle_revoked",
     severity: "warning",
     message: "Your VIP short-handle grant was revoked.",
-    details: { handle: profile.username, admin_id: opts.adminId, reason: opts.reason ?? null },
-  });
+    details: { handle: profile.username, admin_id: opts.adminId, reason: opts.reason ?? null },});
 
   await writeAudit({
     adminId: opts.adminId,

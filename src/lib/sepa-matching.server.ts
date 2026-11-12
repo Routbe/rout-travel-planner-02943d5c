@@ -393,13 +393,12 @@ async function activate(
       amountCents === null ? "amount unknown" : `${(amountCents / 100).toFixed(2)} EUR`
     }).`);
 
-  await dbAdmin.from("security_events").insert({
-    user_id: payment.user_id,
+  await (await import("./security-events.server")).writeSecurityEvent({
+    userId: payment.user_id,
     kind: "verification_activated",
     severity: "info",
     message: `Payment auto-verified from bank e-mail (${reference}).`,
-    details: { payment_id: payment.id, reference, level: 1, amount_cents: amountCents },
-  });
+    details: { payment_id: payment.id, reference, level: 1, amount_cents: amountCents },});
 
   console.info("[sepa-match] level 1 activated", { paymentId: payment.id, reference });
 
