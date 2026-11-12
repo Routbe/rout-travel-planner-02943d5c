@@ -19921,6 +19921,26 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "security_audit_purge",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "rout_purge_due(\nCASE\n    WHEN (user_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text) THEN (user_id)::uuid\n    ELSE NULL::uuid\nEND)",
+          "check": null
+        },
+        {
+          "name": "security_audit_purge_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_purge_due(\nCASE\n    WHEN (user_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text) THEN (user_id)::uuid\n    ELSE NULL::uuid\nEND)",
+          "check": null
         }
       ],
       "grants": {
@@ -20292,6 +20312,46 @@
           ],
           "cmd": "SELECT",
           "using": "true",
+          "check": null
+        },
+        {
+          "name": "sepa_review_admin_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_caller_is_admin()",
+          "check": null
+        },
+        {
+          "name": "sepa_review_admin_update",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "UPDATE",
+          "using": "rout_caller_is_admin()",
+          "check": "rout_caller_is_admin()"
+        },
+        {
+          "name": "sepa_review_purge",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "DELETE",
+          "using": "rout_purge_due(user_id)",
+          "check": null
+        },
+        {
+          "name": "sepa_review_purge_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_purge_due(user_id)",
           "check": null
         }
       ],
@@ -26000,6 +26060,16 @@
           "cmd": "ALL",
           "using": "true",
           "check": "true"
+        },
+        {
+          "name": "webhook_events_admin_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "rout_caller_is_admin()",
+          "check": null
         }
       ],
       "grants": {
@@ -28304,9 +28374,21 @@
     },
     {
       "schema": "public",
+      "name": "rout_audit_head",
+      "args": "p_day date",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_audit_head(p_day date)\n RETURNS TABLE(id bigint, current_hash text, n bigint)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select l.id, l.current_hash,\n         (select pg_catalog.count(*) from public.security_audit_logs c where c.created_at < (p_day + 1))\n    from public.security_audit_logs l where l.created_at < (p_day + 1)\n   order by l.id desc limit 1\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_audit_insert",
       "args": "p_admin uuid, p_email text, p_action text, p_target uuid, p_label text, p_notes text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_audit_insert(p_admin uuid, p_email text, p_action text, p_target uuid, p_label text, p_notes text)\n RETURNS void\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  insert into public.admin_audit_log (admin_id, admin_email, action, target_user_id, target_label, notes)\n  values (p_admin, p_email, left(p_action, 80), p_target, left(p_label, 300), left(p_notes, 2000))\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_audit_purge_expired",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_audit_purge_expired()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare n int;\nbegin\n  perform pg_catalog.set_config('rout.audit_retention', 'on', true);\n  delete from public.security_audit_logs where created_at < pg_catalog.now() - interval '365 days';\n  get diagnostics n = row_count;\n  perform pg_catalog.set_config('rout.audit_retention', '', true);\n  return n;\nend $function$"
     },
     {
       "schema": "public",
@@ -28319,6 +28401,12 @@
       "name": "rout_audit_write",
       "args": "p_action text, p_target uuid, p_label text, p_notes text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_audit_write(p_action text, p_target uuid, p_label text, p_notes text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_actor uuid := public.rout_current_user_id(); v_email text;\nbegin\n  if v_actor is null or not public.rout_is_admin_member(v_actor)\n     or p_action is null or p_action !~ '^[A-Za-z0-9_.:-]{1,80}$' then\n    return false;\n  end if;\n  select u.email into v_email from public.users u where u.id = v_actor;\n  perform public.rout_audit_insert(v_actor, v_email, p_action, p_target, p_label, p_notes);\n  return true;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_audit_write",
+      "args": "p_event_type text, p_user text, p_actor text, p_ip_hash text, p_ua_hash text, p_payload jsonb",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_audit_write(p_event_type text, p_user text, p_actor text, p_ip_hash text, p_ua_hash text, p_payload jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_event_type is null or p_event_type !~ '^[A-Za-z0-9_.:-]{1,80}$'\n     or coalesce(pg_catalog.length(p_user), 0) > 80 or coalesce(pg_catalog.length(p_actor), 0) > 80\n     or (p_ip_hash is not null and p_ip_hash !~ '^[0-9a-f]{1,64}$')\n     or (p_ua_hash is not null and p_ua_hash !~ '^[0-9a-f]{1,64}$')\n     or pg_catalog.octet_length(coalesce(p_payload, '{}'::jsonb)::text) > 16384 then\n    raise exception 'invalid audit entry' using errcode = '22023';\n  end if;\n  insert into public.security_audit_logs (event_type, user_id, actor_id, ip_hash, user_agent_hash, payload_json, prev_hash, current_hash)\n  values (p_event_type, p_user, p_actor, p_ip_hash, p_ua_hash, coalesce(p_payload, '{}'::jsonb), '', '');\nend $function$"
     },
     {
       "schema": "public",
@@ -29390,6 +29478,18 @@
     },
     {
       "schema": "public",
+      "name": "rout_security_event_write",
+      "args": "p_user uuid, p_kind text, p_severity text, p_message text, p_details jsonb",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_security_event_write(p_user uuid, p_kind text, p_severity text, p_message text, p_details jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_kind is null or p_kind !~ '^[a-z0-9_]{1,64}$' or p_severity not in ('info', 'warning', 'error', 'critical')\n     or p_message is null or pg_catalog.length(p_message) not between 1 and 1000\n     or pg_catalog.octet_length(coalesce(p_details, '{}'::jsonb)::text) > 16384 then\n    raise exception 'invalid security event' using errcode = '22023';\n  end if;\n  insert into public.security_events (user_id, kind, severity, message, details)\n  values (p_user, p_kind, p_severity, p_message, coalesce(p_details, '{}'::jsonb));\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_sepa_review_queue",
+      "args": "p_payment uuid, p_user uuid, p_reason text, p_reference text, p_amount integer, p_expected integer, p_payer_name text, p_holder_name text, p_match_score numeric, p_notes text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_sepa_review_queue(p_payment uuid, p_user uuid, p_reason text, p_reference text, p_amount integer, p_expected integer, p_payer_name text, p_holder_name text, p_match_score numeric, p_notes text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v uuid;\nbegin\n  if coalesce(p_reason, 'name_mismatch') !~ '^[a-z_]{1,40}$' or coalesce(pg_catalog.length(p_reference), 0) > 80\n     or coalesce(pg_catalog.length(p_payer_name), 0) > 300 or coalesce(pg_catalog.length(p_holder_name), 0) > 300\n     or coalesce(pg_catalog.length(p_notes), 0) > 2000 then\n    raise exception 'invalid review' using errcode = '22023';\n  end if;\n  insert into public.sepa_review_queue as q\n    (payment_id, user_id, reason, reference, amount_cents, expected_cents, payer_name, holder_name, match_score, notes)\n  values (p_payment, p_user, coalesce(p_reason, 'name_mismatch'), p_reference, p_amount, p_expected,\n          p_payer_name, p_holder_name, p_match_score, p_notes)\n  on conflict (payment_id) where status = 'open' and payment_id is not null\n  do update set reference = coalesce(excluded.reference, q.reference), amount_cents = excluded.amount_cents,\n                payer_name = coalesce(excluded.payer_name, q.payer_name), match_score = excluded.match_score\n  returning q.id into v;\n  return v;\nend $function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_shadow_mute_trust",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_shadow_mute_trust()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_score integer;\n  v_new integer;\n  v_start timestamptz := now() + make_interval(mins => 720 + floor(random() * 2161)::int);\nbegin\n  if new.muted_sender_id is not null then\n    insert into public.qa_trust_charges (recipient_id, sender_user_id) values (new.recipient_id, new.muted_sender_id)\n    on conflict (recipient_id, sender_user_id) where sender_user_id is not null do nothing;\n    get diagnostics v_new = row_count;\n    if v_new = 0 then return new; end if;\n    update public.users u\n       set trust_score = greatest(0, u.trust_score - 20)\n     where u.id = new.muted_sender_id\n     returning u.trust_score into v_score;\n    if v_score is not null and v_score < 50 then\n      update public.users u\n         set global_shadow_ban_starts_at = v_start,\n             global_shadow_ban_until = v_start + interval '7 days'\n       where u.id = new.muted_sender_id\n         and (u.global_shadow_ban_until is null or u.global_shadow_ban_until < now());\n    end if;\n  elsif new.muted_sender_key is not null then\n    insert into public.qa_trust_charges (recipient_id, sender_key) values (new.recipient_id, new.muted_sender_key)\n    on conflict (recipient_id, sender_key) where sender_key is not null do nothing;\n    get diagnostics v_new = row_count;\n    if v_new = 0 then return new; end if;\n    insert into public.qa_guest_trust as g (sender_key, trust_score)\n         values (new.muted_sender_key, 80)\n    on conflict (sender_key) do update\n         set trust_score = greatest(0, g.trust_score - 20), updated_at = now()\n    returning g.trust_score into v_score;\n    if v_score < 50 then\n      update public.qa_guest_trust g\n         set ban_starts_at = v_start, ban_until = v_start + interval '7 days', updated_at = now()\n       where g.sender_key = new.muted_sender_key\n         and (g.ban_until is null or g.ban_until < now());\n    end if;\n  end if;\n  return new;\nend $function$"
@@ -29579,6 +29679,42 @@
       "name": "rout_vp_transfer_scan",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_vp_transfer_scan()\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v_open int; v_expired int;\nbegin\n  update public.verification_payments set expires_at = created_at + interval '7 days'\n   where expires_at is null and status in ('pending', 'awaiting_transfer');\n  update public.verification_payments set last_scanned_at = pg_catalog.now()\n   where status in ('pending', 'awaiting_transfer');\n  get diagnostics v_open = row_count;\n  update public.verification_payments set status = 'expired', updated_at = pg_catalog.now()\n   where status in ('pending', 'awaiting_transfer') and expires_at is not null and expires_at < pg_catalog.now();\n  get diagnostics v_expired = row_count;\n  return pg_catalog.jsonb_build_object('scanned', v_open, 'expired', v_expired);\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_webhook_delivery_due",
+      "args": "p_limit integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_webhook_delivery_due(p_limit integer)\n RETURNS TABLE(id uuid, event_type text, payload_json jsonb, attempts integer, url text, secret_ciphertext text, secret_iv text, endpoint_id uuid)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\n  select d.id, d.event_type, d.payload_json, d.attempts, e.url, e.secret_ciphertext, e.secret_iv, e.id\n    from public.webhook_deliveries d join public.webhook_endpoints e on e.id = d.endpoint_id\n   where d.delivered_at is null and d.failed_at is null and d.next_attempt_at <= pg_catalog.now() and e.active\n   order by d.next_attempt_at limit least(greatest(coalesce(p_limit, 50), 1), 200)\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_webhook_delivery_enqueue",
+      "args": "p_owner uuid, p_event_type text, p_payload jsonb",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_webhook_delivery_enqueue(p_owner uuid, p_event_type text, p_payload jsonb)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare n int;\nbegin\n  if p_owner is null or p_event_type is null or p_event_type !~ '^[a-z0-9_.:-]{1,80}$'\n     or pg_catalog.octet_length(coalesce(p_payload, '{}'::jsonb)::text) > 65536 then\n    raise exception 'invalid webhook delivery' using errcode = '22023';\n  end if;\n  insert into public.webhook_deliveries (endpoint_id, event_type, payload_json)\n  select e.id, p_event_type, coalesce(p_payload, '{}'::jsonb) from public.webhook_endpoints e\n   where e.owner_user_id = p_owner and e.active and (p_event_type = any (e.events) or pg_catalog.cardinality(e.events) = 0);\n  get diagnostics n = row_count;\n  return n;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_webhook_delivery_result",
+      "args": "p_id uuid, p_http_status integer, p_outcome text, p_delay_sec integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_webhook_delivery_result(p_id uuid, p_http_status integer, p_outcome text, p_delay_sec integer)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v int;\nbegin\n  if p_outcome not in ('delivered', 'retry', 'failed')\n     or (p_outcome = 'retry' and (p_delay_sec is null or p_delay_sec not between 1 and 604800)) then\n    raise exception 'invalid delivery result' using errcode = '22023';\n  end if;\n  update public.webhook_deliveries\n     set attempts = attempts + 1, last_status = p_http_status,\n         delivered_at = case when p_outcome = 'delivered' then pg_catalog.now() else delivered_at end,\n         failed_at = case when p_outcome = 'failed' then pg_catalog.now() else failed_at end,\n         next_attempt_at = case when p_outcome = 'retry' then pg_catalog.now() + pg_catalog.make_interval(secs => p_delay_sec)\n                                else next_attempt_at end\n   where id = p_id and delivered_at is null and failed_at is null\n  returning attempts into v;\n  return v;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_webhook_event_claim",
+      "args": "p_id text, p_source text, p_kind text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_webhook_event_claim(p_id text, p_source text, p_kind text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\ndeclare v text;\nbegin\n  if p_id is null or p_id !~ '^[A-Za-z0-9_:.-]{1,200}$' or p_source not in ('stripe')\n     or coalesce(pg_catalog.length(p_kind), 0) > 120 then\n    raise exception 'invalid webhook event' using errcode = '22023';\n  end if;\n  insert into public.webhook_events as w (id, source, kind, status, direction)\n  values (p_id, p_source, p_kind, 'processing', 'inbound')\n  on conflict (id) do update\n     set status = 'processing', attempts = w.attempts + 1, error = null, updated_at = pg_catalog.now()\n   where w.status = 'failed'\n  returning w.id into v;\n  return v is not null;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_webhook_event_finish",
+      "args": "p_id text, p_status text, p_result text, p_error text, p_http_status integer",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_webhook_event_finish(p_id text, p_status text, p_result text, p_error text, p_http_status integer)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_status not in ('done', 'failed') then raise exception 'invalid webhook status' using errcode = '22023'; end if;\n  update public.webhook_events\n     set status = p_status, result = pg_catalog.left(p_result, 500), error = pg_catalog.left(p_error, 500),\n         http_status = p_http_status, direction = 'inbound',\n         completed_at = case when p_status = 'done' then pg_catalog.now() else completed_at end,\n         updated_at = pg_catalog.now()\n   where id = p_id and status = 'processing';\n  return found;\nend $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_webhook_event_record",
+      "args": "p_id text, p_source text, p_kind text, p_direction text, p_http_status integer, p_status text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_webhook_event_record(p_id text, p_source text, p_kind text, p_direction text, p_http_status integer, p_status text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nbegin\n  if p_id is null or p_id !~ '^(outbound|inbound):[A-Za-z0-9_.:-]{1,200}$' or p_source !~ '^[a-z0-9_-]{1,40}$'\n     or coalesce(pg_catalog.length(p_kind), 0) > 120 or p_direction not in ('inbound', 'outbound')\n     or p_status not in ('processing', 'done', 'failed') then\n    raise exception 'invalid webhook event' using errcode = '22023';\n  end if;\n  insert into public.webhook_events (id, source, kind, direction, http_status, status, completed_at)\n  values (p_id, p_source, p_kind, p_direction, p_http_status, p_status,\n          case when p_status = 'processing' then null else pg_catalog.now() end)\n  on conflict (id) do nothing;\n  return found;\nend $function$"
     },
     {
       "schema": "public",
