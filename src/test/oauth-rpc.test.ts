@@ -48,6 +48,8 @@ beforeAll(async () => {
       select exists (select 1 from public.account_deletions d where d.user_id = p_user and d.cancelled_at is null
         and d.completed_at is null and d.purge_after <= now()) and current_setting('rout.purge_user_id', true) = p_user::text $$;
     create table public.user_roles (user_id uuid not null, role text not null);
+    create table public.admin_permissions (user_id uuid not null, permission text not null);
+    create table public.admin_bootstrap_tokens (token_hash text primary key, consumed_by uuid);
     create function public.rout_caller_has_admin_permission(p text) returns boolean language sql stable security definer as $$
       select exists (select 1 from public.user_roles r where r.user_id = public.rout_current_user_id() and r.role = 'admin') $$;
     create table public.users (id uuid primary key, email text, is_disabled boolean not null default false, account_status text not null default 'active');
