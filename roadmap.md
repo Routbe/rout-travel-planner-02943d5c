@@ -5,7 +5,7 @@
 - [x] BETTER_AUTH_SECRET stored
 - [x] Batch 3 expand — db/0228_oauth_rpc.sql live on Neon + code uses it (tests: oauth-rpc, purge-read-repair)
 - [ ] Batch 3 contract — db-pending/0230_oauth_lockdown.sql, waits until Vercel runs the new code
-- [ ] Seal the legacy plaintext signing key (scripts/seal-signing-keys.ts, needs ROUT_PROVIDER_SIGNING_KEK)
+- [x] Legacy plaintext signing key sealed (new sealed key active; old key retired, private part wiped, still published for the grace period)
 - [x] Batch 4 expand — db/0229_payments_and_promos_rpc.sql live on Neon (source hash verified, live flows tested as rout_app with rollback) + code uses it (tests: payments-rpc)
 - [ ] Batch 4 contract — db-pending/0231_payments_lockdown.sql, waits until Vercel runs the new code
 - [x] Inventory remaining rout_server tables (49 total: 12 covered by 0230/0231, 37 still open)
